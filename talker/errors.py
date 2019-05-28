@@ -1,4 +1,5 @@
 from easypy.exceptions import TException
+from easypy.timing import PredicateNotSatisfied
 
 
 class CommandExecutionError(TException):
@@ -69,8 +70,7 @@ class HostDidNotRecover(CommandExecutionError):
     template = "Host {hostname} did not recover from reboot within {timeout}"
 
 
-# for better rendering of the message
-class TalkerProcessLineTimedOut(TException, ProcessLineTimedOut):
+class TalkerProcessLineTimedOut(TException):
     template = "{_msg} ({machine})"
 
 
