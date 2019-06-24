@@ -1,0 +1,76 @@
+#!/bin/bash
+
+### BEGIN INIT INFO
+# Provides:          talker
+# Required-Start:    $network $remote_fs $local_fs $syslog
+# Required-Stop:
+# X-Start-Before:
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Runs a talker daemon
+# Description: Runs a communication over redis daemon
+### END INIT INFO
+
+if [ -e /lib/lsb/init-functions ]; then
+    . /lib/lsb/init-functions
+else
+    . /etc/rc.d/init.d/functions
+fi
+
+NAME=/etc/init.d/talker
+CMD=/root/talker/talker.py
+
+export LC_CTYPE=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+
+export HOME=/root
+export USER=root
+export PATH=/usr/local/bin:$PATH
+
+load_talker() {
+    exec $CMD 2>&1 | logger -t talker
+}
+
+
+stop_talker() {
+    pkill -f $CMD
+    echo "Stopped talker"
+}
+
+
+show_status(){
+        if pgrep -f $CMD > /dev/null; then
+                echo "Talker is running"
+                status=0
+        else
+                echo "Talker is stopped"
+                status=1
+        fi
+}
+
+
+case "$1" in
+    start)
+        load_talker >/dev/null 2>&1 &
+        echo "Started talker"
+        ;;
+    stop)
+        stop_talker
+        ;;
+    restart)
+        stop_talker
+        load_talker >/dev/null 2>&1 &
+        echo "Started talker"
+        ;;
+    status)
+        show_status
+        exit $status
+        ;;
+    *)
+        echo "Usage: $NAME {start|stop|restart|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0
