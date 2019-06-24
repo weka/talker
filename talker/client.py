@@ -33,6 +33,16 @@ def get_talker(host, password, port, agent_version=None, name=None):
 
 
 class Talker(object):
+    """
+    The client to communicate with Talker agents via the same backend (Redis).
+
+    :param [str] host: The backend host's address
+    :param [str] password: The backend user's password
+    :param [int] port: The backend port
+    :param [str] user: The backend username
+    :param [str] agent_version: The Talker agent version we are connecting to
+    :param [str] name: Name to use for the Talker client (for logging purposes)
+    """
 
     def __init__(self, host, password, port, agent_version, name):
         self._host = host
@@ -46,6 +56,12 @@ class Talker(object):
 
     @property
     def redis_params(self):
+        """
+        Get the Redis backend's connection parameters
+
+        :returns: The Redis backend's connection parameters
+        :rtype: Dict
+        """
         return dict(
             host=self._host,
             password=self._password,
@@ -54,6 +70,12 @@ class Talker(object):
 
     @cached_property
     def redis(self):
+        """
+        Get the Redis backend this client is connected to
+
+        :returns: The Redis backend of this Talker client
+        :rtype: StrictRedis
+        """
         return get_redis(**self.redis_params)
 
     def __repr__(self):
@@ -76,6 +98,24 @@ class Talker(object):
             raise_on_failure=True,
             max_output_per_channel=None, set_new_logpath=None):
 
+        """
+        Run a command on a specific host
+
+        :param [str] host_id: The ID of the host to send the command to
+        :param [List[str]] args: The command to run on the host (e.g. 'echo', 'hello')
+        :param [str] name: A name to give to the command (for logging pruposes)
+        :param [int, float] timeout: Command timeout in seconds
+        :param [int, float] server_timeout: Command timeout in seconds to be enforced in the agent
+        :param [int, float] line_timeout: Command output timeout in seconds
+        :param [str] log_file: Log file path for writing command output on the remote host
+        :param [bool] raise_on_failure: Should the client raise an appropriate exception on failure
+        :param [int] max_output_per_channel: Maximum command output in bytes
+        :param [str] set_new_logpath: Reconfigure the remote agent's log path
+
+        :returns: The command running on the remote host
+        :rtype: Cmd
+        """
+
         if not name:
             lines = " ".join(args).strip().splitlines()
             name = compact(lines.pop(0), 60, suffix_length=10)
@@ -92,6 +132,17 @@ class Talker(object):
         return cmd
 
     def reboot(self, host_id, timeout=10 * MINUTE, force=RebootCmd.DEFAULT_FORCE, raise_on_failure=True):
+        """
+        Send a reboot command to the remote host
+
+        :param [str] host_id: The ID of the host to send the command to
+        :param [int, float] timeout: Command timeout in seconds
+        :param [boot] force: Whether to reboot forcefully (without calling sync)
+        :param [bool] raise_on_failure: Should the client raise an appropriate exception on failure
+
+        :returns: The reboot command running on the remote host
+        :rtype: RebootCmd
+        """
         cmd = RebootCmd(
             force=force,
             talker=self, host_id=host_id, raise_on_failure=raise_on_failure,
@@ -100,6 +151,11 @@ class Talker(object):
         return cmd
 
     def reset_server_error(self, host_id):
+        """
+        Reset the last error the agent encountered on
+
+        :param [str] host_id: The ID of the host to send the command to
+        """
         _logger.debug("Reseting pending error")
         self.reactor.rpush("commands-%s" % host_id, json.dumps(dict(cmd="reset_error")))
 
@@ -146,9 +202,28 @@ class Talker(object):
         return MultiObject(cmds).call(on_poll)
 
     def is_done(self, cmds):
+        """
+        Check if a list of commands are all done
+
+        :param [List[Cmd]] cmds: The list of command to check if are done
+
+        :returns: True if all commands are done else False
+        :rtype: bool
+        """
         return len(list(filter(lambda i: i is None, self.poll(cmds)))) == 0
 
     def wait(self, cmds, sleep=0.5, timeout=DAY, initial_log_interval=12):
+        """
+        Wait for commands to finish running
+
+        :param [List[Cmd]] cmds: The list of command to wait on
+        :param [int, float] sleep: How long to sleep between checks
+        :param [int, float] timeout: After how many seconds should we throw a timeout error
+        :param [int, float] initial_log_interval: Interval between logging
+
+        :returns: True if all commands are done else False
+        :rtype: bool
+        """
         for _ in self.as_completed(cmds, sleep, timeout, initial_log_interval):
             pass
         if not all(cmd.retcode in cmd.good_codes for cmd in cmds):  # Not spawning threads without need
@@ -159,6 +234,14 @@ class Talker(object):
         """
         Yields completed commands, until all are completed or the timeout expires (if provided).
         If timeout is 0, this will effectively stop the generator instead of blocking on remaining commands
+
+        :param [List[Cmd]] cmds: The list of command to wait on
+        :param [int, float] sleep: How long to sleep between checks
+        :param [int, float] timeout: After how many seconds should we throw a timeout error
+        :param [int, float] initial_log_interval: Interval between logging
+
+        :returns: Yields commands and their results as a tuple
+        :rtype: Tuple[Cmd, result???]
         """
         pending = list(cmds)
 
@@ -223,6 +306,16 @@ class Talker(object):
                 )
 
     def results(self, cmds, decode='utf-8'):
+        """
+        Wait for commands to finish and get their results
+        This will raise for failed commands if needed
+
+        :param [List[Cmd]] cmds: The list of commands to get their results
+        :param [str] decode: Expected output encoding
+
+        :returns: A MultiObject of tuples containing stdout and stderr
+        :rtype: MultiObject[Tuple[str, str]]
+        """
         self.wait(cmds)
         ret = []
         self.get_output(cmds)
@@ -231,6 +324,15 @@ class Talker(object):
         return ret
 
     def get_output(self, cmds, decode='utf-8'):
+        """
+        Get commands' output so far
+
+        :param [List[Cmd]] cmds: The list of commands to get their output
+        :param [str] decode: Expected output encoding
+
+        :returns: A MultiObject of tuples containing stdout and stderr
+        :rtype: MultiObject[Tuple[str, str]]
+        """
         ret = []
         with self.redis.pipeline() as p:
             for cmd in cmds:
@@ -251,6 +353,16 @@ class Talker(object):
         return MultiObject(ret)
 
     def iter_output(self, cmds, sleep=1.0, decode='utf-8'):
+        """
+        Iterate commands output
+
+        :param [List[Cmd]] cmds: The list of commands to iterate on their output
+        :param [int, float] sleep: How long to sleep between pollings
+        :param [str] decode: Expected output encoding
+
+        :returns: A MultiObject of tuples containing stdout and stderr
+        :rtype: MultiObject[Tuple[str, str]]
+        """
         while not self.is_done(cmds):
             yield self.get_output(cmds, decode=decode)
             wait(sleep)

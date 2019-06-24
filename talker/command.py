@@ -40,6 +40,23 @@ class AbortedBy:
 
 
 class Cmd(object):
+    """
+    A class to represent a command to run on a host
+
+    :param [str] host_id: Host ID to run the command on
+    :param [TalkerClient] talker: The Talker client that is used to send the command
+    :param [bool] raise_on_failure: Should the command raise an exception on failure
+    :param [Tuple[int]] retcode: What return codes are considered success
+    :param [List[str]] args: List of the command arguments
+    :param [float, int] timeout: Command timeout in seconds
+    :param [float, int] server_timeout: Command timeout on the agent in seconds
+    :param [float, int] line_timeout: Command output timeout in seconds
+    :param [str] log_file: Log file path to write command output to in the host
+    :param [str] name: Command name for logging purposes
+    :param [int] max_output_per_channel: Maximum size of the command output to generate in bytes
+    :param [str] set_new_logpath: Set a new path for the Talker agent log file
+    """
+
     def __init__(self,
                  host_id,
                  talker,
@@ -119,13 +136,32 @@ class Cmd(object):
 
     @property
     def timed_out(self):
+        """
+        Is this command timed out
+
+        :rtype: bool
+        """
         return self.aborted_by == AbortedBy.timeout
 
     @property
     def since_started(self):
+        """
+        Get the time since the command acked
+
+        :rtype: Duration
+        """
         return Duration(time.time() - self.ack) if self.ack else None
 
     def get_pid(self, timeout=JOB_PID_TIMEOUT, wait_for_ack=True):
+        """
+        Get the command process ID
+
+        :param [int, float] timeout: After how many seconds should we throw a timeout error
+        :param [bool] wait_for_ack: Wait for ack before checking for the command PID
+
+        :returns: The command PID
+        :rtype: int
+        """
         if not self.pid_supported:
             raise NotImplementedError(
                 'This version (%s) does not support get_pid - need %s or better' % (self.talker.agent_version, V1_6_0))
@@ -135,6 +171,13 @@ class Cmd(object):
         return int(res)
 
     def put_command(self, *, job_repr, **job_data):
+        """
+        Put the command in the commands queue
+        For internal use
+
+        :param [str] job_repr: A string to print the command for logging purposes
+        :param [dict] job_data: Command data to send to the Talker agent
+        """
         get_logger().debug("submitting job [%s] (%s)", job_repr, self.job_id)
         self.talker.reactor.rpush(self._commands_key, json.dumps(job_data), _callback=self.on_sent, _cmd_id=self.job_id)
         # making expiration long enough so it's unlikely to expire in the middle pushing a new command - see WEKAPP-86513
@@ -146,6 +189,9 @@ class Cmd(object):
 
     @log_context(host="{.hostname}")
     def send(self):
+        """
+        Send the command to the Talker agent on the host
+        """
         args = [str(a) for a in self.args]
         command_string = ' '.join(x if ' ' not in x else '"%s"' % x for x in args)
         timeout = self.timeout if self.server_timeout else None
@@ -167,10 +213,18 @@ class Cmd(object):
 
     @property
     def is_sent(self):
+        """
+        Is the command sent to the host
+
+        :rtype: bool
+        """
         return bool(self.ack_timer)
 
     @log_context(host="{.hostname}")
     def reset_server_timeout(self):
+        """
+        Reset timeout on the Talker agent for this command
+        """
         _logger.debug("Reseting timeout, %s, %s", self.job_id, self.timeout)
         self.client_timer.reset()
         self.talker.reactor.rpush(self._commands_key, json.dumps(dict(
@@ -182,6 +236,11 @@ class Cmd(object):
 
     @log_context(host="{.hostname}")
     def send_signal(self, sig):
+        """
+        Send a signal for the process running te command
+
+        :param [int] sig: The signal to send to the command
+        """
         self.talker.reactor.rpush(self._commands_key, json.dumps(dict(
             id=self.job_id,
             cmd="signal",
@@ -191,6 +250,14 @@ class Cmd(object):
 
     @log_context(host="{.hostname}")
     def kill(self, graceful_timeout=3):
+        """
+        Kill the process running the command
+
+        This will send a SIGTERM signal to the process, wait for graceful_timeout seconds,
+        check if the process died and if not, send the SIGKILL signal.
+
+        :param [int, float] graceful_timeout: Seconds to wait between the SIGTERM and SIGKILL signals
+        """
         self.talker.reactor.rpush(self._commands_key, json.dumps(dict(
             id=self.job_id,
             cmd="kill",
@@ -209,6 +276,15 @@ class Cmd(object):
             self.reset_server_timeout()
 
     def iter_results(self, line_timeout=DAY, timeout=DAY):
+        """
+        Iterate return code and output results
+
+        :param [int, float] line_timeout: Timeout for new output to be recieved in seconds
+        :param [int, float] timeout: Timout for command to finish in seconds
+
+        :returns: A Tuple with the channel name and value. Channel names are `retcode`, `stdout` and `stderr`
+        :rtype: Tuple[str, str]
+        """
         timeout = timeout or DAY
         line_timeout = line_timeout or DAY
         blpop_timeout = min(line_timeout, timeout // 10, self.timeout // 10, AGENT_ACK_TIMEOUT // 10)
@@ -271,6 +347,15 @@ class Cmd(object):
             self.raise_if_needed()
 
     def iter_lines(self, line_timeout=DAY, timeout=DAY):
+        """
+        Iterate command output
+
+        :param [int, float] line_timeout: Timeout for new output to be recieved in seconds
+        :param [int, float] timeout: Timout for command to finish in seconds
+
+        :returns: A Tuple containing a line from stdout or None and a line from stderr or None
+        :rtype: Tuple[str, str]
+        """
         done = False
         parts = {
             'stdout': '',
@@ -307,6 +392,14 @@ class Cmd(object):
 
     @log_context(host="{.hostname}")
     def log_pipe(self, logger, stdout_lvl=logging.INFO, stderr_lvl=logging.ERROR, line_timeout=DAY):
+        """
+        Pipe command output to a logger
+
+        :param [logging.Logger] logger: The logger to use to log command output
+        :param [int] stdout_lvl: Logging level to use in order to log stdout
+        :param [int] stderr_lvl: Logging level to use in order to log stderr
+        :param [int, float] line_timeout: Timeout for new output to be recieved in seconds
+        """
         for stdout, stderr in self.iter_lines(line_timeout=line_timeout):
             if stdout_lvl is not None and stdout:
                 logger.log(stdout_lvl, stdout)
@@ -315,6 +408,15 @@ class Cmd(object):
 
     @log_context(host="{.hostname}")
     def foreground(self, stdout=True, stderr=True):
+        """
+        Print command output as it is recieved from the agent
+
+        :param [bool] stdout: Should stdout be printed
+        :param [bool] stderr: Should stderr be printed
+
+        :returns: The command return code when done
+        :rtype: int
+        """
         should_print = dict(stdout=stdout, stderr=stderr)
         for channel, value in self.iter_results():
             if channel in ['stdout', 'stderr'] and should_print[channel]:
@@ -325,6 +427,15 @@ class Cmd(object):
                 self.raise_exception(exception_cls=UnknownChannel, channel=channel)
 
     def check_client_timeout(self):
+        """
+        Check if the command has timed out
+
+        This will raise an appropriate exception depends on what has timed out:
+        * If the reactor haven't sent the command before the handling timer expired: TalkerClientSendTimeout
+        * If the command has yet to be acked and the agent is alive: TalkerCommandLost
+        * If the command has yet to be acked and the agent is not responding: TalkerServerTimeout
+        * If ack is not supported and the command has expired: ClientCommandTimeoutError
+        """
         if not self.is_sent:
             # client/reactor did not send command yet
             if self.handling_timer.expired:
@@ -362,6 +473,9 @@ class Cmd(object):
             )
 
     def raise_if_needed(self):
+        """
+        Raise an error for the command failure. If the command succeeded, do nothing
+        """
         if self.aborted_by == AbortedBy.timeout:
             self.raise_exception(exception_cls=CommandTimeoutError, timeout=Duration(self.timeout))
         if self.aborted_by == AbortedBy.reboot:
@@ -385,6 +499,9 @@ class Cmd(object):
             self.raise_exception()
 
     def raise_exception(self, exception_cls=CommandExecutionError, **params):
+        """
+        Raise an exception for this command
+        """
 
         def process_output(d):
             text = self._decode_output(d, safe=True)
@@ -410,6 +527,14 @@ class Cmd(object):
         )
 
     def on_polled(self, exit_code):
+        """
+        Report return code for the command 
+
+        :param [int] exit_code: The command return code
+
+        :returns: The command return code or None if not yet set
+        :rtype: int
+        """
         if self.retcode is not None:
             return self.retcode
         if exit_code is None:
@@ -419,6 +544,14 @@ class Cmd(object):
         return self.retcode
 
     def poll(self, check_client_timeout=True):
+        """
+        Check if the command is finished and return it's return code
+
+        :param [bool] check_client_timeout: Also check if the command timed out
+
+        :returns: The command return code if done
+        :rtype: int
+        """
         if self.retcode is not None:
             return self.retcode
 
@@ -437,6 +570,11 @@ class Cmd(object):
         return self.on_polled(exit_code)
 
     def set_retcode(self, exit_code):
+        """
+        Set the command return code
+
+        :param [int] exit_code: The command return code
+        """
         if exit_code is None:
             return
         try:
@@ -457,6 +595,14 @@ class Cmd(object):
         self.raise_if_needed()
 
     def wait(self, for_ack=False):
+        """
+        Wait until the command is done
+
+        :param [int] for_ack: Wait for the command to be acked instead of command to finish
+
+        :returns: The command return code when done
+        :rtype: int
+        """
         while True:
 
             if for_ack:
@@ -488,6 +634,14 @@ class Cmd(object):
             return self.on_polled(result[1])
 
     def result(self, decode='utf8'):
+        """
+        Wait until the command is done and return it's stdout output
+
+        :param [str] decode: Expected output encoding
+
+        :returns: The command stdout output
+        :rtype: str
+        """
         self.wait()
         stdout, _ = self.get_output(new=False)
         return self._decode_output(stdout, decode=decode)
@@ -525,13 +679,32 @@ class Cmd(object):
                 p.execute()
 
     def on_output(self, channel, data):
+        """
+        Update the command output
+
+        :param [List[bytes]] channel: The channel to update. One of `self.stdout` or `self.stderr`
+        :param [bytes] data: New data to add to one of the channels
+        """
         if data:
             channel.extend(data)
 
     def on_ack(self, ack):
+        """
+        Update the command ack
+
+        :param [bytes] ack: The command start time on the host
+        """
         self.ack = float(ack.decode())
 
     def get_output(self, new=True):
+        """
+        Get raw command output
+
+        :param [bool] new: Get only new output
+
+        :returns: Stdout and stderr from the command
+        :rtype: Tuple[bytes, bytes]
+        """
         new_stdout, new_stderr = self._fetch_outputs()
         self.on_output(self.stdout, new_stdout)
         self.on_output(self.stderr, new_stderr)
@@ -544,6 +717,12 @@ class Cmd(object):
 
 class RebootCmd(Cmd):
     DEFAULT_FORCE = False
+
+    """
+    A command to handle host reboot
+
+    :param [bool] force: Should reboot forcefully (might skip sync and other host cleanups)
+    """
 
     def __init__(self, *args, force=None, **kwargs):
         super().__init__(*args, **kwargs)
