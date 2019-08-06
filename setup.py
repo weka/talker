@@ -15,8 +15,13 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/weka-io/talker",
+    install_requires=[
+        'redis==2.10.5',
+        'weka-easypy==0.3.1'
+    ],
     extras_require={
-        "dev": ["ipython"]
+        "dev": ["ipython"],
+        "test": ["fakeredis==0.10.1", "mock==3.0.5"],
     },
     packages=["talker"],
     classifiers=[

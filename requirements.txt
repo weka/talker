@@ -1,2 +1,0 @@
--e git://github.com/weka-io/easypy.git@b7de840af4acf9427f7f66d49b40573c33e5a062#egg=easypy
-redis==2.10.5
