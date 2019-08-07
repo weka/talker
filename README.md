@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/weka-io/talker.svg?branch=master)](https://travis-ci.com/weka-io/talker)
+
 # Talker
 
 > The almighty remote command executor for Unix machines
