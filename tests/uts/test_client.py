@@ -70,7 +70,7 @@ class TestClient(unittest.TestCase):
         cmd_key = 'commands-{}'.format(self.host_id)
         ret = self.redis.blpop([cmd_key], timeout=1)
         _, job_data_raw = ret
-        result = json.loads(job_data_raw)
+        result = json.loads(job_data_raw.decode('utf-8'))
         return result
 
     def test_run_command_is_written_to_redis(self):
