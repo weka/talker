@@ -4,7 +4,16 @@ python:
   - "3.5"
   - "3.6"
   - "3.7"
+script:
+  - pytest tests/uts -v
+  - pytest tests/integration -v
 dist: xenial
+before_install:
+  - cd tests/integration
+  - export TALKER_HOST_ID=MyHostId
+  - docker-compose up --no-start
+  - docker-compose start
+  - docker ps
+  - cd ../../
 install:
   - pip install .[test]
-script: pytest -v
