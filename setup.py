@@ -15,6 +15,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/weka-io/talker",
+    license='BSD',
     install_requires=[
         'redis==2.10.5',
         'weka-easypy==0.3.1'
@@ -34,5 +35,6 @@ setuptools.setup(
         "Intended Audience :: Developers",
         "Operating System :: Unix",
         "Operating System :: MacOS",
+        "License :: OSI Approved :: BSD License",
     ],
 )
