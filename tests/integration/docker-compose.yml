@@ -6,7 +6,7 @@ services:
     build:
       context: ../../agent/.
       args:
-        - TALKER_VERSION=1.8.0-eos
+        - TALKER_VERSION=$TALKER_VERSION
         - TALKER_REDIS_VERSION=2.10.6
         - TALKER_HOST_ID=$TALKER_HOST_ID
     links:
