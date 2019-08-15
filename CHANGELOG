@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - Upgrade Redis client version to 3.3.7
+- change agent installation script to allow remote installation
 
 ## [1.8.2] - 2019-08-13
 ### Added
