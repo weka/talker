@@ -1,13 +1,13 @@
 version: '3'
 services:
   redis:
-    image: "redis:alpine"
+    image: "redis:4.0.14-alpine"
   talker:
     build:
       context: ../../agent/.
       args:
         - TALKER_VERSION=$TALKER_VERSION
-        - TALKER_REDIS_VERSION=2.10.6
+        - TALKER_REDIS_VERSION=3.3.7
         - TALKER_HOST_ID=$TALKER_HOST_ID
     links:
       - redis
