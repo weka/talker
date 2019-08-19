@@ -24,6 +24,7 @@ import logging
 import os
 import os.path
 import errno
+import redis
 import select
 import signal
 import subprocess
@@ -534,9 +535,23 @@ class TalkerAgent(object):
         """
         last_reported = 0
         jobs_key = 'commands-%s' % self.host_id
+        tries = 1
         while not self.stop_fetching:
             new_jobs = []
-            ret = self.redis.blpop([jobs_key], timeout=1)
+            try:
+                ret = self.redis.blpop([jobs_key], timeout=1)
+            except redis.ConnectionError:
+                if tries == 3:
+                    logger.debug("Exception number '{}' in 'fetch_new_jobs' - exiting...".format(tries))
+                    reraise(*sys.exc_info())
+                else:
+                    logger.debug("Exception - redis ConnectionError in 'fetch_new_jobs' - try number {}".format(tries))
+                    tries += 1
+                    time.sleep(10)
+                    continue
+            else:
+                tries = 1
+
             if not ret:
                 now = time.time()
                 self.scrub_seen_jobs(now=now)
