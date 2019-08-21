@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 
 from easypy.units import MINUTE, SECOND, MiB
@@ -11,6 +12,7 @@ MAX_OUTPUT_PER_CHANNEL = MiB * 10
 REDIS_SOCKET_TIMEOUT = 1.5 * MINUTE
 JOB_PID_TIMEOUT = 1 * SECOND
 TALKER_COMMAND_LOST_RETRY_ATTEMPTS = 1
+COMMANDS_KEY_TIMEOUT = timedelta(days=1)
 
 TALKER_CONTEXT = ThreadContexts(defaults=dict(talker_quiet=False, ack_timeout=AGENT_ACK_TIMEOUT))
 
