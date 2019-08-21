@@ -77,7 +77,7 @@ REBOOT_FILENAME = '/root/talker/reboot.id'
 EXCEPTION_FILENAME = '/root/talker/last_exception'
 VERSION_FILENAME = '/root/talker/version'
 JOBS_DIR = '/root/talker/jobs'
-JOBS_SEEN = '/root/talker/jobs/eos.json'
+JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
 
 logger = getLogger()
 
@@ -430,7 +430,11 @@ class Job(object):
 
     def send_signal(self, sig):
         self.logger.debug("Sending signal %s", sig)
-        os.killpg(os.getpgid(self.popen.pid), sig)
+        try:
+            os.killpg(os.getpgid(self.popen.pid), sig)
+        except OSError as e:
+            if e.errno != errno.ESRCH:
+                reraise(*sys.exc_info())
 
     def kill(self, graceful_timeout=DEFAULT_GRACEFUL_TIMEOUT):
         self.logger.debug("Killing job (%s)", self.popen.pid)
@@ -511,8 +515,9 @@ class TalkerAgent(object):
         self.fds_to_channels = {}
         self.fds_to_files = {}
         self.seen_jobs = {}
-        self.stop_fetching = False
+        self.stop_fetching = threading.Event()
         self.fetching_stopped = threading.Event()
+        self.stop_agent = threading.Event()
         self.current_processes = {}
         self.exc_info = None
         self.last_scrubbed = 0
@@ -524,6 +529,10 @@ class TalkerAgent(object):
             return
         return first_seen
 
+    def kill(self):
+        self.stop_fetching.set()
+        self.stop_agent.set()
+
     def fetch_new_jobs(self):
         """
         format of job
@@ -534,7 +543,7 @@ class TalkerAgent(object):
         """
         last_reported = 0
         jobs_key = 'commands-%s' % self.host_id
-        while not self.stop_fetching:
+        while not self.stop_fetching.is_set():
             new_jobs = []
             ret = self.redis.blpop([jobs_key], timeout=1)
             if not ret:
@@ -598,7 +607,7 @@ class TalkerAgent(object):
         job.kill(graceful_timeout=graceful_timeout)
 
     def stop_for_reboot(self, requested_by):
-        self.stop_fetching = True
+        self.stop_fetching.set()
         requested_by.log("Waiting for polling to stop")
         self.fetching_stopped.wait(120)
         assert self.fetching_stopped.is_set(), "Polling did not stop"
@@ -769,7 +778,7 @@ class TalkerAgent(object):
         self.redis_fetcher = self.start_worker(self.fetch_new_jobs, name="RedisFetcher")
         self.redis_sender = self.start_worker(self.sync_jobs_progress, name="JobProgress")
 
-        while True:
+        while not self.stop_agent.is_set():
             if not self.get_jobs_outputs():
                 time.sleep(CYCLE_DURATION / 10.0)
             if self.exc_info:

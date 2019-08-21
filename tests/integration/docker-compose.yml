@@ -4,7 +4,7 @@ services:
     image: "redis:4.0.14-alpine"
   talker:
     build:
-      context: ../../agent/.
+      context: ../../talker_agent/.
       args:
         - TALKER_AGENT_VERSION=$TALKER_AGENT_VERSION
         - TALKER_HOST_ID=$TALKER_HOST_ID
