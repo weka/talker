@@ -2,7 +2,6 @@ import time
 import json
 import logging
 from uuid import uuid4
-from datetime import timedelta
 from contextlib import ExitStack
 
 from easypy.units import DAY, HOUR, Duration
@@ -15,7 +14,7 @@ from talker.semver import SMV
 from talker.config import (
     _logger, _verbose_logger, get_logger,
     MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT, TALKER_CONTEXT,
-    AGENT_ACK_TIMEOUT, TALKER_COMMAND_LOST_RETRY_ATTEMPTS
+    AGENT_ACK_TIMEOUT, TALKER_COMMAND_LOST_RETRY_ATTEMPTS, COMMANDS_KEY_TIMEOUT
 )
 from talker.errors import (
     CommandTimeout, UnknownChannel, TalkerCommandLost, HostDidNotRecover, HostStillAlive,
@@ -184,7 +183,7 @@ class Cmd(object):
         # a 5m expiration could fall exactly when we push a new command, causing it to expire before the agent pops it out;
         # a 1d expiration is long enough since new commands are likely to be pushed in the interim, extending the expiration
         # we can't call 'expire' before 'rpush', since it will be a no-op if the key doesn't exist yet
-        self.talker.reactor.expire(self._commands_key, timedelta(days=1))
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
         self.handling_timer = Timer(expiration=AGENT_SEND_TIMEOUT)
 
     @log_context(host="{.hostname}")
@@ -232,7 +231,7 @@ class Cmd(object):
             cmd="reset_timeout",
             new_timeout=self.timeout
         )))
-        self.talker.reactor.expire(self._commands_key, timedelta(minutes=5))
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
 
     @log_context(host="{.hostname}")
     def send_signal(self, sig):
@@ -246,7 +245,7 @@ class Cmd(object):
             cmd="signal",
             signal=sig,
         )))
-        self.talker.reactor.expire(self._commands_key, timedelta(minutes=5))
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
 
     @log_context(host="{.hostname}")
     def kill(self, graceful_timeout=3):
@@ -263,7 +262,7 @@ class Cmd(object):
             cmd="kill",
             graceful_timeout=graceful_timeout,
         )))
-        self.talker.reactor.expire(self._commands_key, timedelta(minutes=5))
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
 
     def _sync_timeout(self, line_timeout):
         if self._line_timeout_synced:
