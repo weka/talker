@@ -24,7 +24,10 @@ def get_redis_container_ip(redis_container_id=None):
         redis_container_id = get_redis_container_id()
     shell_cmd = \
         "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " + redis_container_id
-    return subprocess.check_output(shell_cmd, shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    res = subprocess.check_output(shell_cmd, shell=True, stderr=subprocess.PIPE).decode('utf-8').strip()
+    if not res:
+        raise Exception('redis container does not exist')
+    return res
 
 
 def stop_redis_container(redis_container_id=None):
@@ -44,6 +47,8 @@ def start_redis_container(redis_container_id):
 
 
 def restart_redis_container(redis_container_id=None):
+    if not redis_container_id:
+        redis_container_id = get_redis_container_id()
     stop_redis_container(redis_container_id)
     start_redis_container(redis_container_id)
 
