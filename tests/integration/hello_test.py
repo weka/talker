@@ -2,6 +2,7 @@ import subprocess
 import unittest
 
 from talker.client import get_talker
+from talker.errors import CommandAbortedByOverflow
 
 
 class IntegrationTest(unittest.TestCase):
@@ -25,3 +26,8 @@ class IntegrationTest(unittest.TestCase):
         cmd = self.client.run('MyHostId', 'bash', '-ce', 'echo hello')
         result = cmd.result()
         self.assertEqual(result, 'hello\n')
+
+    def test_max_output(self):
+        cmd = self.client.run('MyHostId', 'bash', '-ce', 'yes')
+        with self.assertRaises(CommandAbortedByOverflow):
+            cmd.result()
