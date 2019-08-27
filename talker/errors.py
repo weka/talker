@@ -18,6 +18,14 @@ class CommandTimeoutError(CommandExecutionError):
     template = "Command timed out after {timeout}: {name}"
 
 
+class CommandPidTimeoutError(TimeoutError):
+    pass
+
+
+class CommandAlreadyDone(TException):
+    template = "Command is already done"
+
+
 class CommandAbortedByReboot(CommandExecutionError):
     template = "Command aborted by reboot request: {name}"
 
