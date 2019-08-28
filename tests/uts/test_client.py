@@ -11,11 +11,12 @@ from fakeredis import FakeStrictRedis
 from mock import patch
 
 from talker.client import get_talker
-from talker.errors import ClientCommandTimeoutError, CommandExecutionError
+from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone
+from tests.utils import get_version
 
 
 def get_uuid() -> str:
-    return uuid.uuid4().__str__()
+    return str(uuid.uuid4())
 
 
 def my_get_redis(*args, **kwargs) -> FakeStrictRedis:
@@ -46,7 +47,7 @@ class TestClient(unittest.TestCase):
     @patch('talker.client.get_redis', my_get_redis)
     def setUp(self):
         super().setUp()
-        self.client = get_talker('test_host', 'password', 1111)
+        self.client = get_talker('test_host', 'password', 1111, get_version())
         self.redis = self.client.redis
         self.host_id = get_uuid()
 
@@ -56,15 +57,23 @@ class TestClient(unittest.TestCase):
     def write_response_to_redis(
             self, job_id: str, stdout_val: str = '', stderr_val: str = '',
             retcode: int = 0, pid: str = '1234', delay: float = None):
+
+        self.write_ack_to_redis(job_id)
+        self.redis.set('result-{}-pid'.format(job_id), pid)
+
         if delay:
             sleep(delay)
 
-        ack = time()
         self.redis.rpush('result-{}-stdout'.format(job_id), stdout_val)
         self.redis.rpush('result-{}-stderr'.format(job_id), stderr_val)
-        self.redis.rpush('result-{}-ack'.format(job_id), ack)
         self.redis.rpush('result-{}-retcode'.format(job_id), retcode)
-        self.redis.rpush('result-{}-pid'.format(job_id), pid)
+
+    def write_ack_to_redis(self, job_id):
+        ack = time()
+        self.redis.rpush('result-{}-ack'.format(job_id), ack)
+
+    def delete_pid_key(self, job_id):
+        self.redis.delete('result-{}-pid'.format(job_id))
 
     def get_command_from_redis(self) -> dict:
         cmd_key = 'commands-{}'.format(self.host_id)
@@ -80,6 +89,10 @@ class TestClient(unittest.TestCase):
         expected_value = {
             'id': cmd.job_id,
             'cmd': ['bash', '-ce', 'echo hello'],
+            'line_timeout': None,
+            'log_file': None,
+            'max_output_per_channel': 10485760,
+            'set_new_logpath': None,
             'timeout': 3600.0}
         self.assertEqual(result, expected_value)
 
@@ -160,3 +173,15 @@ class TestClient(unittest.TestCase):
         self.write_response_to_redis(cmd2.job_id, retcode=2)
         polling_result = self.client.poll(cmds).L
         self.assertEqual([0, 2], polling_result)
+
+    def test_pid_not_found(self):
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'true')
+        self.write_ack_to_redis(cmd.job_id)
+        self.assertRaises(CommandPidTimeoutError, cmd.get_pid)
+
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello', server_timeout=False)
+        self.write_response_to_redis(cmd.job_id, 'hello\n')
+        res = cmd.result()
+        self.assertEqual(res, 'hello\n')
+        self.delete_pid_key(cmd.job_id)
+        self.assertRaises(CommandAlreadyDone, cmd.get_pid)

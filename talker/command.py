@@ -20,7 +20,7 @@ from talker.errors import (
     CommandTimeout, UnknownChannel, TalkerCommandLost, HostDidNotRecover, HostStillAlive,
     TalkerClientSendTimeout, TalkerServerTimeout, ClientCommandTimeoutError, CommandTimeoutError,
     CommandAbortedByReboot, CommandAbortedByOverflow, CommandHanging, CommandOrphaned,
-    CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError
+    CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone
 )
 
 
@@ -166,7 +166,14 @@ class Cmd(object):
                 'This version (%s) does not support get_pid - need %s or better' % (self.talker.agent_version, V1_6_0))
         if wait_for_ack:
             self.wait(for_ack=True)
-        res = self.talker.reactor.get(self._pid_key, timeout=JOB_PID_TIMEOUT)
+
+        res = self.talker.reactor.get(self._pid_key, timeout=timeout)
+        if res is None:
+            if self.retcode is not None:
+                raise CommandAlreadyDone()
+            else:
+                raise CommandPidTimeoutError('redis timeout after {} when trying to get pid'.format(timeout))
+
         return int(res)
 
     def put_command(self, *, job_repr, **job_data):
@@ -597,7 +604,7 @@ class Cmd(object):
         """
         Wait until the command is done
 
-        :param [int] for_ack: Wait for the command to be acked instead of command to finish
+        :param [bool] for_ack: Wait for the command to be acked instead of command to finish
 
         :returns: The command return code when done
         :rtype: int
