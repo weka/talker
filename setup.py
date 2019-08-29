@@ -24,7 +24,7 @@ setuptools.setup(
         "dev": ["ipython"],
         "test": ["fakeredis==1.0.4", "mock==3.0.5"],
     },
-    packages=["talker"],
+    packages=["talker", "talker_agent"],
     classifiers=[
         "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",

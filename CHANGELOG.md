@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - fix get process ID race
+- fix talker termination when trying to kill an existed process
 
 ## [1.8.2] - 2019-08-13
 ### Added
