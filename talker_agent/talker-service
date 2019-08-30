@@ -18,7 +18,7 @@ else
 fi
 
 NAME=/etc/init.d/talker
-CMD=/root/talker/talker.py
+CMD=/root/talker/talker_agent/talker.py
 
 export LC_CTYPE=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
@@ -27,6 +27,7 @@ export LANG=en_US.UTF-8
 export HOME=/root
 export USER=root
 export PATH=/usr/local/bin:$PATH
+export PYTHONPATH="${PYTHONPATH}:/root/talker"
 
 load_talker() {
     exec $CMD 2>&1 | logger -t talker
