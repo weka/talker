@@ -1,10 +1,14 @@
 #!/bin/sh
 
 if [ "$DOWNLOAD_TALKER" = true ] ; then
-  sudo mkdir -p /root/talker
+  sudo mkdir -p /root/talker/talker_agent
   cd /root/talker
-  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/agent/talker-service > talker-service
-  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/agent/talker.py > talker.py
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/talker-service > talker_agent/talker-service
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/talker.py > talker_agent/agent.py
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/talker.py > talker_agent/config.py
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/talker.py > talker_agent/job.py
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/talker.py > talker_agent/talker.py
+  curl -sfL https://github.com/weka-io/talker/raw/v1.8.1/talker_agent/utils.py > talker_agent/utils.py
   chmod +x talker.py
 fi
 

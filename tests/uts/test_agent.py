@@ -8,7 +8,7 @@ from time import sleep, time
 from fakeredis import FakeStrictRedis
 from mock import patch
 
-from talker_agent.talker import TalkerAgent
+from talker_agent.agent import TalkerAgent
 
 
 def get_uuid():
@@ -30,7 +30,7 @@ def raise_file_not_found(*args, **kwargs):
 JOBS_DIR = '/tmp/talker/jobs'
 
 
-@patch('talker_agent.talker.JOBS_DIR', JOBS_DIR)
+@patch('talker_agent.job.JOBS_DIR', JOBS_DIR)
 class TestClient(unittest.TestCase):
 
     def setUp(self):
@@ -81,7 +81,7 @@ class TestClient(unittest.TestCase):
         self.agent.redis.rpush(jobs_key, json.dumps(job_data))
         return job_id
 
-    @patch('talker_agent.talker.TalkerAgent.signal_job', kill_process_before_signaling)
+    @patch('talker_agent.agent.TalkerAgent.signal_job', kill_process_before_signaling)
     def test_signal_existed_process(self):
         job_id = self.run_cmd_on_agent(['bash', '-ce', 'sleep 5'])
         job_id = self.run_cmd_on_agent('signal', job_id)
