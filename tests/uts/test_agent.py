@@ -1,12 +1,16 @@
 import json
 import os
+import sys
 import unittest
 import uuid
 from threading import Thread
 from time import sleep, time
+from traceback import format_exception
 
+from easypy.timing import wait
 from fakeredis import FakeStrictRedis
 from mock import patch
+from redis.exceptions import ConnectionError
 
 from talker_agent.talker import TalkerAgent
 
@@ -28,36 +32,51 @@ def raise_file_not_found(*args, **kwargs):
 
 
 JOBS_DIR = '/tmp/talker/jobs'
+EXCEPTION_FILENAME = '/tmp/talker/last_exception'
+JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
 
 
 @patch('talker_agent.talker.JOBS_DIR', JOBS_DIR)
-class TestClient(unittest.TestCase):
+@patch('talker_agent.talker.JOBS_SEEN', JOBS_SEEN)
+@patch('talker_agent.talker.EXCEPTION_FILENAME', EXCEPTION_FILENAME)
+class TestAgent(unittest.TestCase):
 
     def setUp(self):
-        super(TestClient, self).setUp()
+        super(TestAgent, self).setUp()
 
         if not os.path.isdir(JOBS_DIR):
             os.makedirs(JOBS_DIR)
+        if os.path.isfile(EXCEPTION_FILENAME):
+            os.remove(EXCEPTION_FILENAME)
+
+        self.run_agent()
+
+    def tearDown(self):
+        self.terminate_agent()
+
+    def terminate_agent(self):
+        self.agent.kill()
+        self.agent_thread.join()
+
+    def run_agent(self):
+
+        def start_agent_safely():
+            try:
+                self.agent.start()
+            except Exception as e:
+                self.agent_exception = e
+                with open(EXCEPTION_FILENAME, "w") as f:
+                    f.writelines(format_exception(*sys.exc_info()))
 
         self.agent = TalkerAgent()
         self.agent.host_id = get_uuid()
         self.agent.redis = FakeStrictRedis()
         self.agent.pending_exception = None
         self.agent_exception = None
-        self.agent_thread = Thread(target=self.run_agent)
+        self.agent_thread = Thread(target=start_agent_safely)
         self.agent_thread.start()
 
-    def tearDown(self):
-        self.agent.kill()
-        self.agent_thread.join()
-
-    def run_agent(self):
-        try:
-            self.agent.start()
-        except Exception as e:
-            self.agent_exception = e
-
-    def assert_agent_exception(self, exception_class, timeout=1):
+    def assert_agent_exception(self, exception_class, *, timeout=1):
         iteration_sleep = 0.1
         begin = time()
         while not self.agent_exception and (time() - begin) < timeout:
@@ -84,8 +103,8 @@ class TestClient(unittest.TestCase):
     @patch('talker_agent.talker.TalkerAgent.signal_job', kill_process_before_signaling)
     def test_signal_existed_process(self):
         job_id = self.run_cmd_on_agent(['bash', '-ce', 'sleep 5'])
-        job_id = self.run_cmd_on_agent('signal', job_id)
-        _, ret_code = self.agent.redis.blpop('result-{}-retcode'.format(job_id))
+        signal_job_id = self.run_cmd_on_agent('signal', job_id)
+        _, ret_code = self.agent.redis.blpop('result-{}-retcode'.format(signal_job_id), timeout=1)
         self.assertEqual(ret_code.decode('utf-8'), '-15')
 
     @patch('os.killpg', raise_file_not_found)
@@ -94,3 +113,24 @@ class TestClient(unittest.TestCase):
         self.run_cmd_on_agent('signal', job_id)
         self.assert_agent_exception(OSError)
         self.assertEqual(2, self.agent_exception.errno)
+
+    def test_command_orphaned(self):
+        job_id = self.run_cmd_on_agent(['bash', '-ce', 'sleep 5'])
+        ret = wait(
+            pred=lambda: self.agent.redis.get("result-{}-pid".format(job_id)),
+            message="result-{}-pid not found".format(job_id), timeout=1)
+        self.assertIsNotNone(ret)
+        self.terminate_agent()
+        self.run_agent()
+        _, retcode = self.agent.redis.blpop('result-{}-retcode'.format(job_id), timeout=1)
+        self.assertEqual(retcode.decode('utf-8'), 'orphaned')
+
+    def test_last_exception(self):
+        self.agent.redis = FakeStrictRedis(connected=False)
+        self.assert_agent_exception(ConnectionError, timeout=2)
+        self.run_agent()
+        job_id = self.run_cmd_on_agent(['bash', '-ce', 'echo hello'])
+        _, retcode = self.agent.redis.blpop('result-{}-retcode'.format(job_id), timeout=1)
+        self.assertEqual(retcode.decode('utf-8'), 'error')
+        _, err = self.agent.redis.blpop('result-{}-stderr'.format(job_id), timeout=1)
+        self.assertIn('redis.exceptions.ConnectionError', err.decode('utf-8'))
