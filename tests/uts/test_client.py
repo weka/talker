@@ -51,14 +51,14 @@ class TestClient(unittest.TestCase):
         self.redis = self.client.redis
         self.host_id = get_uuid()
 
-    def deferred_write_to_redis(self, **kwargs):
-        Thread(target=self.write_response_to_redis, kwargs=kwargs, daemon=True).start()
+    def deferred_agent_response_mock(self, **kwargs):
+        Thread(target=self.mock_agent_response, kwargs=kwargs, daemon=True).start()
 
-    def write_response_to_redis(
+    def mock_agent_response(
             self, job_id: str, stdout_val: str = '', stderr_val: str = '',
             retcode: int = 0, pid: str = '1234', delay: float = None):
 
-        self.write_ack_to_redis(job_id)
+        self.mock_agent_ack(job_id)
         self.redis.set('result-{}-pid'.format(job_id), pid)
 
         if delay:
@@ -68,37 +68,42 @@ class TestClient(unittest.TestCase):
         self.redis.rpush('result-{}-stderr'.format(job_id), stderr_val)
         self.redis.rpush('result-{}-retcode'.format(job_id), retcode)
 
-    def write_ack_to_redis(self, job_id):
+    def mock_agent_ack(self, job_id):
         ack = time()
         self.redis.rpush('result-{}-ack'.format(job_id), ack)
 
     def delete_pid_key(self, job_id):
         self.redis.delete('result-{}-pid'.format(job_id))
 
-    def get_command_from_redis(self) -> dict:
+    def get_command(self) -> dict:
         cmd_key = 'commands-{}'.format(self.host_id)
         ret = self.redis.blpop([cmd_key], timeout=1)
         _, job_data_raw = ret
         result = json.loads(job_data_raw.decode('utf-8'))
         return result
 
-    def test_run_command_is_written_to_redis(self):
-        cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello')
-        sleep(0.1)  # write to redis must be completed before we pop from redis
-        result = self.get_command_from_redis()
-        expected_value = {
-            'id': cmd.job_id,
-            'cmd': ['bash', '-ce', 'echo hello'],
-            'line_timeout': None,
-            'log_file': None,
-            'max_output_per_channel': 10485760,
-            'set_new_logpath': None,
-            'timeout': 3600.0}
+    @staticmethod
+    def generate_command(
+            id, cmd, line_timeout=None, log_file=None, max_output_per_channel=10485760,
+            set_new_logpath=None, timeout=3600.0):
+
+        return dict(
+            id=id, cmd=cmd, line_timeout=line_timeout, log_file=log_file,
+            max_output_per_channel=max_output_per_channel, set_new_logpath=set_new_logpath, timeout=timeout)
+
+    def assert_command_serialization(self, bash_command, **kwargs):
+        cmd = self.client.run(self.host_id, *bash_command, **kwargs)
+        result = self.get_command()
+        expected_value = self.generate_command(id=cmd.job_id, cmd=bash_command, **kwargs)
         self.assertEqual(result, expected_value)
+
+    def test_command_serialization(self):
+        self.assert_command_serialization(['bash', '-ce', 'echo hello'])
+        self.assert_command_serialization(['bash', '-ce', 'echo hello'], max_output_per_channel=10)
 
     def test_command_result_from_agent(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello')
-        self.write_response_to_redis(cmd.job_id, 'hello\n')
+        self.mock_agent_response(cmd.job_id, 'hello\n')
         res = cmd.result()
         self.assertEqual(res, 'hello\n')
 
@@ -106,7 +111,7 @@ class TestClient(unittest.TestCase):
         delay = 0.5
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'sleep {}'.format(delay))
         before = time()
-        self.deferred_write_to_redis(job_id=cmd.job_id, delay=delay)
+        self.deferred_agent_response_mock(job_id=cmd.job_id, delay=delay)
         ret = cmd.wait()
         after = time()
         self.assertEqual(ret, 0)
@@ -116,24 +121,24 @@ class TestClient(unittest.TestCase):
         delay = 5
         cmd = self.client.run(
             self.host_id, 'bash', '-ce', 'sleep {}'.format(delay), timeout=delay * 0.0001, server_timeout=False)
-        self.deferred_write_to_redis(job_id=cmd.job_id, delay=delay)
+        self.deferred_agent_response_mock(job_id=cmd.job_id, delay=delay)
         self.assertRaises(ClientCommandTimeoutError, cmd.wait)
 
     def test_command_fail(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'exit 2')
-        self.write_response_to_redis(cmd.job_id, retcode=2)
+        self.mock_agent_response(cmd.job_id, retcode=2)
         self.assertRaises(CommandExecutionError, cmd.result)
 
     def test_ignoring_command_fail(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'exit 2', raise_on_failure=False)
-        self.write_response_to_redis(cmd.job_id, retcode=2)
+        self.mock_agent_response(cmd.job_id, retcode=2)
         cmd.result()
 
     def test_logging_output(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'for i in {0..4}; do echo $i; sleep 0.05; done')
         expected_value = '\n'.join([str(i) for i in range(5)]) + '\n'
         for i in range(5):
-            self.write_response_to_redis(cmd.job_id, stdout_val='{}\n'.format(i))
+            self.mock_agent_response(cmd.job_id, stdout_val='{}\n'.format(i))
 
         log_stream = io.StringIO()
         logger = get_logger(log_stream)
@@ -144,8 +149,7 @@ class TestClient(unittest.TestCase):
     def test_client_reboot(self):
         timeout = 60.0
         cmd = self.client.reboot(self.host_id, timeout=Duration(timeout), force=False, raise_on_failure=True)
-        sleep(0.1)  # write to redis must be completed before we pop from redis
-        result = self.get_command_from_redis()
+        result = self.get_command()
         expected_value = {
             'id': cmd.job_id,
             'cmd': 'reboot',
@@ -156,7 +160,7 @@ class TestClient(unittest.TestCase):
     def test_reset_server_error(self):
         self.client.reset_server_error(self.host_id)
         sleep(0.1)
-        result = self.get_command_from_redis()
+        result = self.get_command()
         expected_value = {'cmd': 'reset_error'}
         self.assertEqual(result, expected_value)
 
@@ -167,20 +171,20 @@ class TestClient(unittest.TestCase):
         cmds = [cmd1, cmd2]
         polling_result = self.client.poll(cmds).L
         self.assertEqual([None, None], polling_result)
-        self.write_response_to_redis(cmd1.job_id, 'hello\n')
+        self.mock_agent_response(cmd1.job_id, 'hello\n')
         polling_result = self.client.poll(cmds).L
         self.assertEqual([0, None], polling_result)
-        self.write_response_to_redis(cmd2.job_id, retcode=2)
+        self.mock_agent_response(cmd2.job_id, retcode=2)
         polling_result = self.client.poll(cmds).L
         self.assertEqual([0, 2], polling_result)
 
     def test_pid_not_found(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'true')
-        self.write_ack_to_redis(cmd.job_id)
+        self.mock_agent_ack(cmd.job_id)
         self.assertRaises(CommandPidTimeoutError, cmd.get_pid)
 
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello', server_timeout=False)
-        self.write_response_to_redis(cmd.job_id, 'hello\n')
+        self.mock_agent_response(cmd.job_id, 'hello\n')
         res = cmd.result()
         self.assertEqual(res, 'hello\n')
         self.delete_pid_key(cmd.job_id)
