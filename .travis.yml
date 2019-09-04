@@ -1,21 +1,46 @@
 language: python
-python:
-  - "3.4"
-  - "3.5"
-  - "3.6"
-  - "3.7"
-script:
-  - pytest tests/uts -v
-  - pytest tests/integration -v
+matrix:
+  include:
+    - stage: client unit tests
+      python: 3.4
+      env:
+        - TEST_SUITE="tests/uts/test_client.py"
+    - python: 3.5
+      env:
+        - TEST_SUITE="tests/uts/test_client.py"
+    - python: 3.6
+      env:
+        - TEST_SUITE="tests/uts/test_client.py"
+    - python: 3.7
+      env:
+        - TEST_SUITE="tests/uts/test_client.py"
+    - stage: agent unit tests
+      python: 2.7
+      env:
+        - TEST_SUITE="tests/uts/test_agent.py"
+    - stage: integration tests
+      python: 3.4
+      env:
+        - TEST_SUITE="tests/integration"
+      before_install:
+        - tests/integration/setup.sh
+    - python: 3.5
+      env:
+        - TEST_SUITE="tests/integration"
+      before_install:
+        - tests/integration/setup.sh
+    - python: 3.6
+      env:
+        - TEST_SUITE="tests/integration"
+      before_install:
+        - tests/integration/setup.sh
+    - python: 3.7
+      env:
+        - TEST_SUITE="tests/integration"
+      before_install:
+        - tests/integration/setup.sh
+script: pytest $TEST_SUITE -v
 dist: xenial
-before_install:
-  - export TALKER_AGENT_VERSION=$(cat VERSION)
-  - cd tests/integration
-  - export TALKER_HOST_ID=MyHostId
-  - docker-compose up --no-start
-  - docker-compose start
-  - docker-compose ps
-  - cd ../../
 install:
   - pip install .[test]
 deploy:
