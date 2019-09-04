@@ -7,12 +7,12 @@ from threading import Thread
 from time import sleep, time
 from traceback import format_exception
 
-from easypy.timing import wait
 from fakeredis import FakeStrictRedis
 from mock import patch
 from redis.exceptions import ConnectionError
 
 from talker_agent.talker import TalkerAgent
+from tests.utils import retry
 
 
 def get_uuid():
@@ -76,7 +76,7 @@ class TestAgent(unittest.TestCase):
         self.agent_thread = Thread(target=start_agent_safely)
         self.agent_thread.start()
 
-    def assert_agent_exception(self, exception_class, *, timeout=1):
+    def assert_agent_exception(self, exception_class, timeout=1):
         iteration_sleep = 0.1
         begin = time()
         while not self.agent_exception and (time() - begin) < timeout:
@@ -116,9 +116,7 @@ class TestAgent(unittest.TestCase):
 
     def test_command_orphaned(self):
         job_id = self.run_cmd_on_agent(['bash', '-ce', 'sleep 5'])
-        ret = wait(
-            pred=lambda: self.agent.redis.get("result-{}-pid".format(job_id)),
-            message="result-{}-pid not found".format(job_id), timeout=1)
+        ret = retry(lambda: self.agent.redis.get("result-{}-pid".format(job_id)), timeout=1)
         self.assertIsNotNone(ret)
         self.terminate_agent()
         self.run_agent()
@@ -133,4 +131,4 @@ class TestAgent(unittest.TestCase):
         _, retcode = self.agent.redis.blpop('result-{}-retcode'.format(job_id), timeout=1)
         self.assertEqual(retcode.decode('utf-8'), 'error')
         _, err = self.agent.redis.blpop('result-{}-stderr'.format(job_id), timeout=1)
-        self.assertIn('redis.exceptions.ConnectionError', err.decode('utf-8'))
+        self.assertIn('ConnectionError', err.decode('utf-8'))

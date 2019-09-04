@@ -2,8 +2,7 @@ import subprocess
 
 from fakeredis import FakeStrictRedis
 
-from talker.client import get_talker
-
+from time import sleep, time
 
 def get_container_id(container_name):
     return subprocess.check_output(
@@ -54,6 +53,7 @@ def restart_redis_container(redis_container_id=None):
 
 
 def get_talker_client():
+    from talker.client import get_talker
     redis_container_ip = get_redis_container_ip()
     return get_talker(redis_container_ip, None, 6379, get_version())
 
@@ -71,3 +71,12 @@ def sanity(host_id=''):
     cmd = cl.run(host_id, 'bash', '-ce', 'echo hello')
     result = cmd.result()
     assert (result == 'hello\n')
+
+
+def retry(func, timeout, interval=0.1):
+    end_time = time() + timeout
+    res = func()
+    while res is None and time() < end_time:
+        sleep(interval)
+        res = func()
+    return res
