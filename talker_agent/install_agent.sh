@@ -25,5 +25,6 @@ echo "$TALKER_AGENT_VERSION" > version
 # Add redis py dependency
 REDIS_COMMIT_ID=ad84781ea260be0a1ca4bf6768959b50e8835a6b
 curl -sfL https://github.com/weka-io/redis-py/archive/"$REDIS_COMMIT_ID".tar.gz | tar -xz
-mv redis-py-"$REDIS_COMMIT_ID"/redis .
+mv redis redis_old
+cp -a redis-py-"$REDIS_COMMIT_ID"/redis/. redis/
 rm -rf redis-py-"$REDIS_COMMIT_ID"
