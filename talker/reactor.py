@@ -83,7 +83,9 @@ class TalkerReactor():
             args=args, kwargs=kwargs, callback=_callback,
             event=event, results=[])
 
-        self._commands[cmd_idx] = item
+        if cmd not in self.ASYNC_COMMANDS:
+            self._commands[cmd_idx] = item
+
         self._commands_queue.put(item)
 
         if _async:
