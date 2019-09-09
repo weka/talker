@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 import uuid
+from collections import namedtuple
 from threading import Thread
 from time import sleep, time
 from traceback import format_exception
@@ -11,8 +12,9 @@ from fakeredis import FakeStrictRedis
 from mock import patch
 from redis.exceptions import ConnectionError
 
+from talker_agent.talker import MAX_OUTPUT_PER_CHANNEL
 from talker_agent.talker import TalkerAgent
-from tests.utils import retry
+from tests.utils import get_retcode, get_stdout, retry
 
 
 def get_uuid():
@@ -91,12 +93,12 @@ class TestAgent(unittest.TestCase):
     def get_commands_key(self):
         return "commands-%s" % self.agent.host_id
 
-    def run_cmd_on_agent(self, cmd, job_id=None):
+    def run_cmd_on_agent(self, cmd, job_id=None, **kwargs):
         jobs_key = self.get_commands_key()
         if not job_id:
             job_id = get_uuid()
 
-        job_data = {'id': job_id, 'cmd': cmd, 'timeout': 3600.0}
+        job_data = dict(id=job_id, cmd=cmd, **kwargs)
         self.agent.redis.rpush(jobs_key, json.dumps(job_data))
         return job_id
 
@@ -132,3 +134,36 @@ class TestAgent(unittest.TestCase):
         self.assertEqual(retcode.decode('utf-8'), 'error')
         _, err = self.agent.redis.blpop('result-{}-stderr'.format(job_id), timeout=1)
         self.assertIn('ConnectionError', err.decode('utf-8'))
+
+    def test_max_output_per_channel(self):
+        TestCase = namedtuple('TestCase', ['val', 'val_repeats', 'max_output_per_channel', 'expected_ret'])
+        test_cases = [
+            TestCase('123', 1, 3, '0'),
+            TestCase('1\\n', 1, 3, '0'),
+            TestCase('12\\n', 1, 3, '0'),
+            TestCase('1234', 1, 3, 'overflowed'),
+            TestCase('123\\n', 1, 3, 'overflowed'),
+            TestCase('12\\n3', 1, 3, 'overflowed'),
+            TestCase('1', MAX_OUTPUT_PER_CHANNEL, MAX_OUTPUT_PER_CHANNEL, '0'),
+            TestCase('1', MAX_OUTPUT_PER_CHANNEL, None, '0'),
+            TestCase('1', MAX_OUTPUT_PER_CHANNEL + 1, MAX_OUTPUT_PER_CHANNEL, 'overflowed'),
+            TestCase('1', MAX_OUTPUT_PER_CHANNEL + 1, None, 'overflowed'),
+            TestCase('1', MAX_OUTPUT_PER_CHANNEL + 1, MAX_OUTPUT_PER_CHANNEL + 1, '0'),
+        ]
+
+        kwargs = {}
+
+        for val, val_repeats, max_output_per_channel, expected_ret in test_cases:
+            if max_output_per_channel is not None:
+                kwargs = dict(max_output_per_channel=max_output_per_channel)
+
+            job_id = self.run_cmd_on_agent(
+                ['bash', '-ce', 'python -c "import sys; sys.stdout.write(\'{}\' * {})"'.format(val, val_repeats)],
+                **kwargs)
+            retcode = get_retcode(self.agent.redis, job_id)
+            self.assertEqual(retcode, expected_ret)
+
+            if expected_ret == '0':
+                res = get_stdout(self.agent.redis, job_id)
+                expected_val = val.replace('\\n', '\n') * val_repeats
+                self.assertEqual(res, expected_val)

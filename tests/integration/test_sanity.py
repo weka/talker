@@ -1,22 +1,13 @@
-import subprocess
 import unittest
 
-from talker.client import get_talker
 from talker.errors import CommandAbortedByOverflow
+from tests.utils import get_talker_client, get_retcode, get_stdout
 
 
 class IntegrationTest(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        redis_container_id = subprocess.check_output(
-            'cd tests/integration; docker-compose ps -q redis', shell=True,  stderr=subprocess.PIPE).decode('utf-8')
-        if not redis_container_id:
-            raise Exception('No Redis Container')
-
-        shell_cmd = \
-            "docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' " + redis_container_id
-        redis_container_ip = subprocess.check_output(shell_cmd, shell=True, stderr=subprocess.PIPE)
-        self.client = get_talker(redis_container_ip.strip(), None, 6379)
+        self.client = get_talker_client()
         self.client.redis.ping()
 
     def tearDown(self) -> None:
@@ -27,7 +18,18 @@ class IntegrationTest(unittest.TestCase):
         result = cmd.result()
         self.assertEqual(result, 'hello\n')
 
-    def test_max_output(self):
+    def test_max_output_exceeds_maximum(self):
         cmd = self.client.run('MyHostId', 'bash', '-ce', 'yes')
         with self.assertRaises(CommandAbortedByOverflow):
             cmd.result()
+
+    def test_max_output_per_channel_set(self):
+        max_output_per_channel = 3
+        for val, expected_ret in [('123', '0'), ('1234', 'overflowed')]:
+            cmd = self.client.run(
+                'MyHostId', 'bash', '-ce', 'echo -n {}'.format(val), max_output_per_channel=max_output_per_channel)
+            ret = get_retcode(self.client.redis, cmd.job_id)
+            self.assertEqual(ret, expected_ret)
+            if expected_ret == 0:
+                res = get_stdout(self.client.redis, cmd.job_id)
+                self.assertEqual(res, val)

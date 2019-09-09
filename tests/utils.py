@@ -80,3 +80,16 @@ def retry(func, timeout, interval=0.1):
         sleep(interval)
         res = func()
     return res
+
+
+def get_blpop_value(redis, key, timeout):
+    _, ret_code = redis.blpop(key, timeout)
+    return ret_code.decode('utf-8')
+
+
+def get_retcode(redis, job_id, timeout=1):
+    return get_blpop_value(redis, 'result-{}-retcode'.format(job_id), timeout)
+
+
+def get_stdout(redis, job_id, timeout=1):
+    return get_blpop_value(redis, 'result-{}-stdout'.format(job_id), timeout)
