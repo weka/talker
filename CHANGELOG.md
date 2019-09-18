@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - fix reactor ASYNC_COMMANDS memory leak
+- fix missing *wait* in polling completed commands
 
 ## [1.8.3] - 2019-09-05
 ### Changed
