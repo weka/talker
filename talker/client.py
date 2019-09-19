@@ -304,6 +304,7 @@ class Talker(object):
                     "Commands (%s) did not complete within timeout" % len(pending),
                     timeout=timeout, pending=pending
                 )
+            wait(sleep)
 
     def results(self, cmds, decode='utf-8'):
         """
