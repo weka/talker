@@ -24,7 +24,7 @@ def get_redis(host, password, port):
     return StrictRedis(
         host=host, password=password, port=port,
         socket_timeout=REDIS_SOCKET_TIMEOUT,
-        socket_connect_timeout=30, retry_on_timeout=True)
+        socket_connect_timeout=30, retry_on_timeout=True, health_check_interval=30)
 
 
 @locking_cache
