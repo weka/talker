@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - fix reactor ASYNC_COMMANDS memory leak
 - fix missing *wait* in polling completed commands
+- fix redis.exceptions.ConnectionError:<br/>
+  Error while reading from socket: (104, 'Connection reset by peer')
 
 ## [1.8.3] - 2019-09-05
 ### Changed
