@@ -62,6 +62,8 @@ class TalkerReactor():
                 for item in items:
                     redis_func = getattr(pipeline, item.cmd)
                     redis_func(*item.args, **item.kwargs)
+                _verbose_logger.debug(
+                    'Executing talker %s redis %s pipeline', self.talker.name, self.talker.redis_params['host'])
                 results = pipeline.execute()
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
                 self._log_sent_items(items)  # logs to debug WEKAPP-35305
