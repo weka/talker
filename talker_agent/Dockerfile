@@ -2,7 +2,6 @@ FROM python:2.7-slim-buster
 
 #args from docker-compose.yaml
 ARG TALKER_AGENT_VERSION
-ARG TALKER_HOST_ID
 
 RUN mkdir -p /root/talker
 WORKDIR /root/talker
@@ -13,8 +12,6 @@ RUN echo "LC_ALL=en_US.UTF-8" >> /etc/environment && \
     echo "LANG=en_US.UTF-8" > /etc/locale.conf && \
     locale-gen en_US.UTF-8
 
-RUN echo {\"password\": null, \"port\": 6379, \"host\": \"redis\", \"host_id\": \"$TALKER_HOST_ID\"} > conf.json
-
 COPY install_agent.sh ./
 RUN chmod +x install_agent.sh && ./install_agent.sh
 
@@ -23,7 +20,7 @@ RUN chmod +x /etc/init.d/talker && \
     ln -s /usr/local/bin/python /usr/bin/python && \
     update-rc.d talker defaults
 
-COPY talker.py ./
+COPY talker.py config.ini ./
 RUN chmod +x talker.py
 
 CMD service talker start && tail -f /dev/null
