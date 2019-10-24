@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- compile the agent using nuitka
 - using .ini file for agent configuration
 
 ## [1.8.4] - 2019-09-22
