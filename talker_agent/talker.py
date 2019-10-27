@@ -42,7 +42,7 @@ try:
     from configparser import ConfigParser
 except:  # python 2.7
     from ConfigParser import ConfigParser
-
+import graphyte
 
 PY3 = sys.version_info[0] == 3
 
@@ -709,6 +709,9 @@ class TalkerAgent(object):
     def start_job(self, job_data_raw):
         job_data = json.loads(job_data_raw)
         cmd = job_data['cmd']
+        if config.parser.getboolean('metrics', 'enabled'):
+            logger.debug('sending command metrics')
+            graphyte.send('commands_received', 1)
         if isinstance(cmd, list):
             if SIMULATE_DROPS_RATE and cmd != ['true'] and random.random() > SIMULATE_DROPS_RATE:
                 logger.warning("dropping job: %(id)s", job_data)
@@ -932,6 +935,8 @@ def main(*args):
 
     config = Config()
     set_logging_to_file(config.parser.get('logging', 'logpath'))
+    if config.parser.getboolean('metrics', 'enabled'):
+        graphyte.init(config.parser.get('metrics', 'host'))
 
     # to help with WEKAPP-74054
     os.system("df")

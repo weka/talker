@@ -2,6 +2,15 @@ version: '3'
 services:
   redis:
     image: "redis:4.0.14-alpine"
+  graphite:
+    image: "graphiteapp/graphite-statsd"
+    container_name: graphite
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 2023-2024:2023-2024
+      - 8125:8125/udp
+      - 8126:8126
   talker:
     build:
       context: ../../talker_agent/.
@@ -10,3 +19,4 @@ services:
         - TALKER_HOST_ID=$TALKER_HOST_ID
     links:
       - redis
+      - graphite
