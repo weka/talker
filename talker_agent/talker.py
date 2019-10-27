@@ -38,6 +38,11 @@ from textwrap import dedent
 from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
+try:
+    from configparser import ConfigParser
+except:  # python 2.7
+    from ConfigParser import ConfigParser
+import graphyte
 
 PY3 = sys.version_info[0] == 3
 
@@ -72,7 +77,7 @@ else:
 
 # ===========================================================================================
 
-CONFIG_FILENAME = '/root/talker/conf.json'
+CONFIG_FILENAME = '/root/talker/config.ini'
 REBOOT_FILENAME = '/root/talker/reboot.id'
 EXCEPTION_FILENAME = '/root/talker/last_exception'
 VERSION_FILENAME = '/root/talker/version'
@@ -98,6 +103,8 @@ DEFAULT_GRACEFUL_TIMEOUT = 3
 
 JOBS_EXPIRATION = 15  # 20 * 60  # how long to keep job ids in the EOS registry (exactly-once-semantics)
 
+config = None
+
 
 class LineTimeout(Exception):
     pass
@@ -109,6 +116,39 @@ class JobHanging(Exception):
 
 class JobTimeout(Exception):
     pass
+
+
+class Config:
+    def __init__(self, filename=CONFIG_FILENAME):
+        self._filename = filename
+        self._parser = ConfigParser()
+        self.load_configuration()
+
+    @property
+    def parser(self):
+        return self._parser
+
+    def load_configuration(self):
+        try:
+            self._parser.read(self._filename)
+        except (IOError, OSError) as e:
+            logger.error(e, exc_info=True)
+            sys.exit(1)
+
+        logger.info("Loaded configuration: %s", self._filename)
+
+        self.validate_config()
+
+    def update(self, section, **kwargs):
+        for key, val in kwargs.items():
+            self._parser.set(section, key, val)
+
+        with open(self._filename, 'w') as configfile:
+            self._parser.write(configfile)
+
+    def validate_config(self):
+        if not self._parser.get('agent', 'host_id'):
+            raise Exception('config agent.host_id is missing')
 
 
 class Job(object):
@@ -669,6 +709,9 @@ class TalkerAgent(object):
     def start_job(self, job_data_raw):
         job_data = json.loads(job_data_raw)
         cmd = job_data['cmd']
+        if config.parser.getboolean('metrics', 'enabled'):
+            logger.debug('sending command metrics')
+            graphyte.send('commands_received', 1)
         if isinstance(cmd, list):
             if SIMULATE_DROPS_RATE and cmd != ['true'] and random.random() > SIMULATE_DROPS_RATE:
                 logger.warning("dropping job: %(id)s", job_data)
@@ -786,7 +829,14 @@ class TalkerAgent(object):
                 reraise(*self.exc_info)
                 assert False, "exception should have been raised"
 
-    def setup(self, host_id, host, port, password, socket_timeout=10, retry_on_timeout=True, health_check_interval=30):
+    def setup(self, socket_timeout=10, retry_on_timeout=True, health_check_interval=30):
+        host_id = config.parser.get('agent', 'host_id')
+        host = config.parser.get('redis', 'host')
+        port = config.parser.getint('redis', 'port')
+        try:
+            password = config.parser.get('redis', 'password')
+        except:
+            password = None
         logger.info("Connecting to redis %s:%s", host, port)
         import redis  # deferring so that importing talker (for ut) doesn't immediately fail if package not available
         self.redis = redis.StrictRedis(
@@ -857,12 +907,7 @@ def set_logging_to_file(logpath):
 
     FILE_LOG_HANDLER = handler
 
-    with open(CONFIG_FILENAME, 'r') as f:
-        config = json.load(f)
-
-    with open(CONFIG_FILENAME, 'w') as f:
-        config.update(logpath=logpath)
-        json.dump(config, f)
+    config.update('logging', logpath=logpath)
 
 
 def setup_logging(verbose):
@@ -879,29 +924,19 @@ def setup_logging(verbose):
     logging.root.addHandler(handler)
 
 
-def load_configuration():
-    try:
-        with open(CONFIG_FILENAME, 'r') as f:
-            config = json.load(f)
-    except (IOError, OSError):
-        logger.warning("No configuration, exiting")
-        sys.exit(1)
-
-    logger.info("Loaded configuration: %s", CONFIG_FILENAME)
-    for p in sorted(config.items()):
-        logger.info("   %s: %s", *p)
-    return config
-
-
 def main(*args):
+    global config
+
     setup_logging(verbose="-v" in args)
     no_restart = "--no-restart" in args
 
     version = open(VERSION_FILENAME).read()
     logger.info("Starting Talker: %s", version)
 
-    config = load_configuration()
-    set_logging_to_file(config.pop("logpath", "/var/log/talker.log"))
+    config = Config()
+    set_logging_to_file(config.parser.get('logging', 'logpath'))
+    if config.parser.getboolean('metrics', 'enabled'):
+        graphyte.init(config.parser.get('metrics', 'host'))
 
     # to help with WEKAPP-74054
     os.system("df")
@@ -912,7 +947,7 @@ def main(*args):
 
     try:
         agent = TalkerAgent()
-        agent.setup(**config)
+        agent.setup()
         agent.start()
     except SystemExit:
         raise
