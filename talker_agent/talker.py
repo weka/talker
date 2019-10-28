@@ -103,8 +103,6 @@ DEFAULT_GRACEFUL_TIMEOUT = 3
 
 JOBS_EXPIRATION = 15  # 20 * 60  # how long to keep job ids in the EOS registry (exactly-once-semantics)
 
-config = None
-
 
 class LineTimeout(Exception):
     pass
@@ -119,7 +117,7 @@ class JobTimeout(Exception):
 
 
 class Config:
-    def __init__(self, filename=CONFIG_FILENAME):
+    def __init__(self, filename):
         self._filename = filename
         self._parser = ConfigParser()
         self.load_configuration()
@@ -413,7 +411,7 @@ class Job(object):
         if self.set_new_logpath:
             self.logger.info("Got request to set a new logpath: %s", self.set_new_logpath)
             if self.exit_code == 0:
-                set_logging_to_file(self.set_new_logpath)
+                self.agent.set_logging_to_file(self.set_new_logpath)
             else:
                 self.logger.info("Skipping due to non-zero exit code")
 
@@ -544,7 +542,7 @@ class RebootJob(Job):
 
 class TalkerAgent(object):
 
-    def __init__(self):
+    def __init__(self, config_filename=CONFIG_FILENAME):
         self.output_lock = threading.RLock()
         self.redis = None
         self.host_id = None
@@ -561,6 +559,8 @@ class TalkerAgent(object):
         self.current_processes = {}
         self.exc_info = None
         self.last_scrubbed = 0
+        self.config = Config(config_filename)
+        self.FILE_LOG_HANDLER = None
 
     def check_if_seen(self, job_id):
         now = time.time()
@@ -826,17 +826,46 @@ class TalkerAgent(object):
                 reraise(*self.exc_info)
                 assert False, "exception should have been raised"
 
+    def set_logging_to_file(self, logpath):
+        if self.FILE_LOG_HANDLER:
+            prev_logpath = self.FILE_LOG_HANDLER.stream.name
+            logger.info("closing %s; switched to %s", prev_logpath, logpath)
+            logging.root.removeHandler(self.FILE_LOG_HANDLER)
+            self.FILE_LOG_HANDLER.close()
+            shutil.move(prev_logpath, logpath)
+
+        dirname = os.path.dirname(logpath)
+        for i in range(60):
+            if os.path.isdir(dirname):
+                break
+            logger.info("%s not found, waiting to be mounted...", dirname)
+            time.sleep(2)
+        else:
+            raise Exception("logpath directory not found: %s" % dirname)
+
+        handler = RotatingFileHandler(logpath, encoding='utf-8', maxBytes=50 * 1024 * 1024, backupCount=2)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s|%(threadName)-15s|%(name)-38s|%(levelname)-5s|%(funcName)-15s|%(message)s"))
+        logging.root.addHandler(handler)
+
+        self.FILE_LOG_HANDLER = handler
+
+        self.config.update('logging', logpath=logpath)
+
     def setup(self):
-        host_id = config.parser.get('agent', 'host_id')
-        host = config.parser.get('redis', 'host')
-        port = config.parser.getint('redis', 'port')
+        self.set_logging_to_file(self.config.parser.get('logging', 'logpath'))
+
+        host_id = self.config.parser.get('agent', 'host_id')
+        host = self.config.parser.get('redis', 'host')
+        port = self.config.parser.getint('redis', 'port')
         try:
-            password = config.parser.get('redis', 'password')
+            password = self.config.parser.get('redis', 'password')
         except:
             password = None
-        socket_timeout = config.parser.getfloat('redis', 'socket_timeout')
-        retry_on_timeout = config.parser.getboolean('redis', 'retry_on_timeout')
-        health_check_interval = config.parser.getfloat('redis', 'health_check_interval')
+        socket_timeout = self.config.parser.getfloat('redis', 'socket_timeout')
+        retry_on_timeout = self.config.parser.getboolean('redis', 'retry_on_timeout')
+        health_check_interval = self.config.parser.getfloat('redis', 'health_check_interval')
+
         logger.info("Connecting to redis %s:%s", host, port)
         import redis  # deferring so that importing talker (for ut) doesn't immediately fail if package not available
         self.redis = redis.StrictRedis(
@@ -880,36 +909,6 @@ def handle_exception(*exc_info):
     logger.error("Uncaught exception", exc_info=exc_info)
 
 
-FILE_LOG_HANDLER = None
-
-
-def set_logging_to_file(logpath):
-    global FILE_LOG_HANDLER
-    if FILE_LOG_HANDLER:
-        prev_logpath = FILE_LOG_HANDLER.stream.name
-        logger.info("closing %s; switched to %s", prev_logpath, logpath)
-        logging.root.removeHandler(FILE_LOG_HANDLER)
-        FILE_LOG_HANDLER.close()
-        shutil.move(prev_logpath, logpath)
-
-    dirname = os.path.dirname(logpath)
-    for i in range(60):
-        if os.path.isdir(dirname):
-            break
-        logger.info("%s not found, waiting to be mounted...", dirname)
-        time.sleep(2)
-    else:
-        raise Exception("logpath directory not found: %s" % dirname)
-
-    handler = RotatingFileHandler(logpath, encoding='utf-8', maxBytes=50 * 1024 * 1024, backupCount=2)
-    handler.setFormatter(logging.Formatter("%(asctime)s|%(threadName)-15s|%(name)-38s|%(levelname)-5s|%(funcName)-15s|%(message)s"))
-    logging.root.addHandler(handler)
-
-    FILE_LOG_HANDLER = handler
-
-    config.update('logging', logpath=logpath)
-
-
 def setup_logging(verbose):
     sys.excepthook = handle_exception
     for handler in logging.root.handlers:
@@ -932,9 +931,6 @@ def main(*args):
 
     version = open(VERSION_FILENAME).read()
     logger.info("Starting Talker: %s", version)
-
-    config = Config()
-    set_logging_to_file(config.parser.get('logging', 'logpath'))
 
     # to help with WEKAPP-74054
     os.system("df")

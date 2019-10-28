@@ -70,7 +70,7 @@ class TestAgent(unittest.TestCase):
                 with open(EXCEPTION_FILENAME, "w") as f:
                     f.writelines(format_exception(*sys.exc_info()))
 
-        self.agent = TalkerAgent()
+        self.agent = TalkerAgent(config_filename='talker_agent/config.ini')
         self.agent.host_id = get_uuid()
         self.agent.redis = FakeStrictRedis()
         self.agent.pending_exception = None
