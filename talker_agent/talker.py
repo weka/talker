@@ -1,23 +1,5 @@
 #!/usr/local/bin/python3
 
-
-"""
-Talker Agent (Server-Side)
-==========================
-
-* Important:
-    - keep this free of dependencies (there's only a redis dependency)
-    - keep this compatible with python2.6+ (no dict comprehension)
-
-* Packaging:
-    - update the 'TALKER' version in version_info
-    - ./teka pack talker
-
-* Testing:
-    - See ./wepy/devops/talker.py (client-side)
-
-"""
-
 import fcntl
 import json
 import logging
@@ -313,13 +295,7 @@ class Job(object):
 
         self.job_fn = "%s/job.%s.%s" % (JOBS_DIR, self.job_id, self.popen.pid)
         with open(self.job_fn, "w") as f:
-            try:
-                f.write(repr(self.cmd))
-            except IOError:
-                # to help with WEKAPP-74054
-                os.system("df")
-                os.system("df -i")
-                raise
+            f.write(repr(self.cmd))
 
         self.agent.current_processes[self.job_id] = self
         for channel in self.channels:
@@ -939,10 +915,6 @@ def main(*args):
 
     config = Config()
     set_logging_to_file(config.parser.get('logging', 'logpath'))
-
-    # to help with WEKAPP-74054
-    os.system("df")
-    os.system("df -i")
 
     open("/var/run/talker.pid", "w").write(str(os.getpid()))
     atexit.register(os.unlink, "/var/run/talker.pid")
