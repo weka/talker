@@ -25,6 +25,8 @@ try:
 except:  # python 2.7
     from ConfigParser import ConfigParser
 
+import redis
+
 
 PY3 = sys.version_info[0] == 3
 
@@ -817,7 +819,6 @@ class TalkerAgent(object):
         health_check_interval = config.parser.getfloat('redis', 'health_check_interval')
 
         logger.info("Connecting to redis %s:%s", host, port)
-        import redis  # deferring so that importing talker (for ut) doesn't immediately fail if package not available
         self.redis = redis.StrictRedis(
             host=host, port=port, db=0, password=password,
             socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
@@ -947,7 +948,4 @@ def main(*args):
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if "--ut" in args:
-        print("Talker don't need no UT")
-    else:
-        sys.exit(main(*args))
+    sys.exit(main(*args))
