@@ -498,7 +498,9 @@ class Cmd(object):
             _, traceback = self.get_output(new=False)
             traceback = self._decode_output(traceback, safe=True).strip()
             exception = traceback.splitlines()[-1]
-            raise TalkerError(host_id=self.host_id, hostname=self.hostname, fulltb=traceback, _exception=exception)
+            raise TalkerError(
+                host_id=self.host_id, hostname=self.hostname, fulltb=traceback, talker=self.talker, _exception=exception
+            )
         if self.retcode is None:
             return
         if self.raise_on_failure and self.retcode not in self.good_codes:
