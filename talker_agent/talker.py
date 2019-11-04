@@ -826,7 +826,7 @@ class TalkerAgent(object):
                 reraise(*self.exc_info)
                 assert False, "exception should have been raised"
 
-    def setup(self, socket_timeout=10, retry_on_timeout=True, health_check_interval=30):
+    def setup(self):
         host_id = config.parser.get('agent', 'host_id')
         host = config.parser.get('redis', 'host')
         port = config.parser.getint('redis', 'port')
@@ -834,12 +834,19 @@ class TalkerAgent(object):
             password = config.parser.get('redis', 'password')
         except:
             password = None
+
+        socket_timeout = config.parser.getfloat('redis', 'socket_timeout')
+        socket_connect_timeout = config.parser.getfloat('redis', 'socket_connect_timeout')
+        retry_on_timeout = config.parser.getboolean('redis', 'retry_on_timeout')
+        health_check_interval = config.parser.getfloat('redis', 'health_check_interval')
+
         logger.info("Connecting to redis %s:%s", host, port)
         import redis  # deferring so that importing talker (for ut) doesn't immediately fail if package not available
         self.redis = redis.StrictRedis(
             host=host, port=port, db=0, password=password,
-            socket_timeout=socket_timeout, retry_on_timeout=retry_on_timeout,
-            health_check_interval=health_check_interval)
+            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
+            retry_on_timeout=retry_on_timeout, health_check_interval=health_check_interval
+        )
 
         while True:
             try:
