@@ -77,11 +77,11 @@ else:
 
 # ===========================================================================================
 
-CONFIG_FILENAME = '/etc/talker/config.ini'
-REBOOT_FILENAME = '/etc/talker/reboot.id'
-EXCEPTION_FILENAME = '/etc/talker/last_exception'
-VERSION_FILENAME = '/etc/talker/version'
-JOBS_DIR = '/etc/talker/jobs'
+CONFIG_FILENAME = '/root/talker/config.ini'
+REBOOT_FILENAME = '/root/talker/reboot.id'
+EXCEPTION_FILENAME = '/root/talker/last_exception'
+VERSION_FILENAME = '/root/talker/version'
+JOBS_DIR = '/root/talker/jobs'
 JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
 
 logger = getLogger()
