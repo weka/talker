@@ -15,7 +15,10 @@ from easypy.humanize import compact
 from talker.reactor import TalkerReactor
 from talker.command import Cmd, RebootCmd
 from talker.errors import RedisTimeoutError
-from talker.config import REDIS_SOCKET_TIMEOUT, _logger, _verbose_logger
+from talker.config import (
+    REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
+    REDIS_HEALTH_CHECK_INTERVAL, _logger, _verbose_logger
+)
 from talker.semver import SemVer
 
 
@@ -24,7 +27,10 @@ def get_redis(host, password, port):
     return StrictRedis(
         host=host, password=password, port=port,
         socket_timeout=REDIS_SOCKET_TIMEOUT,
-        socket_connect_timeout=30, retry_on_timeout=True, health_check_interval=30)
+        socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+        retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
+        health_check_interval=REDIS_HEALTH_CHECK_INTERVAL
+    )
 
 
 @locking_cache
