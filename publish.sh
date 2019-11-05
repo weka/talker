@@ -11,17 +11,20 @@ then
       exit 0
 fi
 
+git checkout master
+git fetch -p
+git reset --hard origin/master
+
 # update CHANGELOG.md
 new_header="## [$version] - $(date +'%Y-%m-%d')"
 awk -v line="$new_header" '/Unreleased/ { print; printf "\n"; print line; next }1' CHANGELOG.md > tmpfile
 mv tmpfile CHANGELOG.md
 
-git checkout master
-git fetch -p
-git reset --hard origin/master
 echo -n "$version" > VERSION
+
 git add VERSION CHANGELOG.md
 git commit -m "version $version"
+
 git tag v"$version"
 git push --set-upstream origin master
 git push --tags
