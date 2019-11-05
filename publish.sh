@@ -1,6 +1,7 @@
 # You should run this script when you want to publish a new talker version.
 # Notice: you must first merge your changes to master branch, then run the script with the new version as a parameter.
 # for example: ./publish.sh 1.8.2
+set -ex
 
 version=$1
 
@@ -16,7 +17,8 @@ awk -v line="$new_header" '/Unreleased/ { print; printf "\n"; print line; next }
 mv tmpfile CHANGELOG.md
 
 git checkout master
-git pull
+git fetch -p
+git reset --hard origin/master
 echo -n "$version" > VERSION
 git add VERSION CHANGELOG.md
 git commit -m "version $version"
