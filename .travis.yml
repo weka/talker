@@ -15,7 +15,7 @@ matrix:
       env:
         - TEST_SUITE="tests/uts/test_client.py"
     - stage: agent unit tests
-      python: 2.7
+      python: 3.5
       env:
         - TEST_SUITE="tests/uts/test_agent.py"
     - stage: integration tests

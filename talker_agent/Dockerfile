@@ -1,4 +1,4 @@
-FROM python:2.7-slim-buster
+FROM python:3.5-slim-buster
 
 #args from docker-compose.yaml
 ARG TALKER_AGENT_VERSION
