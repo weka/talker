@@ -22,6 +22,7 @@ from logging.handlers import RotatingFileHandler
 from configparser import ConfigParser
 
 import redis
+from redis import TimeoutError
 
 
 def reraise(tp, value, tb=None):
@@ -534,7 +535,11 @@ class TalkerAgent(object):
         jobs_key = 'commands-%s' % self.host_id
         while not self.stop_fetching.is_set():
             new_jobs = []
-            ret = self.redis.blpop([jobs_key], timeout=1)
+            try:
+                ret = self.redis.blpop([jobs_key], timeout=1)
+            except TimeoutError:
+                logger.exception("Failed fetching new jobs")
+                ret = None
             if not ret:
                 now = time.time()
                 self.scrub_seen_jobs(now=now)
