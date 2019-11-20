@@ -1,7 +1,7 @@
 import unittest
 
 from talker_agent.talker import Config
-from talker.errors import CommandAbortedByOverflow
+from talker.errors import CommandAbortedByOverflow, CommandExecutionError
 from tests.utils import get_talker_client, get_retcode, get_stdout
 
 
@@ -38,3 +38,8 @@ class IntegrationTest(unittest.TestCase):
             if expected_ret == 0:
                 res = get_stdout(self.client.redis, cmd.job_id)
                 self.assertEqual(res, val)
+
+    def test_bad_command(self):
+        cmd = self.client.run(self.host_id, 'foo')
+        with self.assertRaises(CommandExecutionError):
+            cmd.result()

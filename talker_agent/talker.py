@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3
 
 
 """
@@ -304,7 +304,7 @@ class Job(object):
                         time.sleep(random.random() * 2)
                         continue
 
-                self.stderr.chunks.append(e.strerror)
+                self.stderr.chunks.append(e.strerror.encode('utf-8'))
                 self.set_result(e.errno)
                 self.finalize()
                 return
