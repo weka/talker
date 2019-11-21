@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - upgrade agent to run with python3
+- upgrade - redis==3.3.11
+- use main redis project (not forked) for agent
+- remove version dependency behavior
 
 ## [1.8.6] - 2019-11-05
 ### Added
