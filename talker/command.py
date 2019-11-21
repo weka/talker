@@ -10,7 +10,6 @@ from easypy.humanize import compact
 from easypy.properties import safe_property
 from easypy.timing import Timer
 
-from talker.semver import SMV
 from talker.config import (
     _logger, _verbose_logger, get_logger,
     MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT, TALKER_CONTEXT,
@@ -22,10 +21,6 @@ from talker.errors import (
     CommandAbortedByReboot, CommandAbortedByOverflow, CommandHanging, CommandOrphaned,
     CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone
 )
-
-
-V1_3_1 = SMV("1.3.1")  # min version for ack and kwargs_resilient
-V1_6_0 = SMV("1.6.0")  # min version for get_pid
 
 
 class AbortedBy:
@@ -95,15 +90,8 @@ class Cmd(object):
         self._line_timeout_synced = False
         self.attempts = 0  # in case of TalkerCommandLost
 
-        # this is the version from which the agent acknowledges receipt of command
-        self.ack_supported = self.talker.agent_version >= V1_3_1
-        # this is the version from which the agent is ignores params it does not support
-        self.kwargs_resilient = self.talker.agent_version >= V1_3_1
-        # this is the version from which the agent is ignores params it does not support
-        self.pid_supported = self.talker.agent_version >= V1_6_0
-
     def __repr__(self):
-        return "%s(<%s>%s)" % (self.__class__.__name__, self.job_id, "!" if (self.ack_supported and not self.ack) else "")
+        return "%s(<%s>%s)" % (self.__class__.__name__, self.job_id, "!" if (not self.ack) else "")
 
     @property
     def _result_key(self):
@@ -161,9 +149,6 @@ class Cmd(object):
         :returns: The command PID
         :rtype: int
         """
-        if not self.pid_supported:
-            raise NotImplementedError(
-                'This version (%s) does not support get_pid - need %s or better' % (self.talker.agent_version, V1_6_0))
         if wait_for_ack:
             self.wait(for_ack=True)
 
@@ -203,13 +188,12 @@ class Cmd(object):
         timeout = self.timeout if self.server_timeout else None
 
         extras = {}
-        if self.kwargs_resilient:
-            extras.update(
-                max_output_per_channel=self.max_output_per_channel,
-                set_new_logpath=self.set_new_logpath,
-                line_timeout=self.line_timeout,
-                log_file=self.log_file,
-                )
+        extras.update(
+            max_output_per_channel=self.max_output_per_channel,
+            set_new_logpath=self.set_new_logpath,
+            line_timeout=self.line_timeout,
+            log_file=self.log_file,
+        )
 
         self.put_command(id=self.job_id, cmd=args, timeout=timeout, job_repr=compact(command_string, 100), **extras)
 
@@ -446,7 +430,7 @@ class Cmd(object):
             # client/reactor did not send command yet
             if self.handling_timer.expired:
                 self.raise_exception(exception_cls=TalkerClientSendTimeout, timeout=self.handling_timer.elapsed)
-        elif self.ack_supported and not self.ack:
+        elif not self.ack:
             is_talker_alive_name = 'is_talker_alive'
 
             # client did not receive command - check all timers
@@ -563,7 +547,7 @@ class Cmd(object):
         if self.retcode is not None:
             return self.retcode
 
-        if self.ack_supported and not self.ack:
+        if not self.ack:
             ack = self.talker.reactor.lpop(self._ack_key)
             if ack is None:
                 if check_client_timeout:
@@ -614,7 +598,6 @@ class Cmd(object):
         while True:
 
             if for_ack:
-                assert self.ack_supported, "ack is not supported"
                 if self.ack is not None:
                     return self.ack
 
@@ -624,7 +607,7 @@ class Cmd(object):
             # we don't want to wait too long, cause we want to raise timeout exceptions promptly
             blpop_timeout = (
                 1 if not self.is_sent
-                else self.ack_timer.expiration // 10 if (self.ack_supported and not self.ack)
+                else self.ack_timer.expiration // 10 if (not self.ack)
                 else self.client_timer.expiration // 10)
 
             result = self.talker.reactor.blpop([self._exit_code_key, self._ack_key], timeout=blpop_timeout)
