@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - agent syncs only reboot sentinel and log file before reboot
+- make all agent threads thread-safe
 
 ## [1.8.8] - 2020-01-28
 ### Added
