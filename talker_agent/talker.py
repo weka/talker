@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
 from configparser import ConfigParser
+from threading import Lock
 
 import redis
 
@@ -59,6 +60,29 @@ DEFAULT_GRACEFUL_TIMEOUT = 3
 JOBS_EXPIRATION = 15  # 20 * 60  # how long to keep job ids in the EOS registry (exactly-once-semantics)
 
 config = None
+first_exception_info = None
+safe_thread_lock = Lock()
+
+
+class SafeThread(threading.Thread):
+    def __init__(self, *, target, name, args=(), kwargs=None, daemon=None):
+        super().__init__(None, target, name, args, kwargs, daemon=daemon)
+        self.exc_info = None
+
+    def run(self):
+        global first_exception_info
+        try:
+            self._target(*self._args, **self._kwargs)
+        except:
+            exc_info = sys.exc_info()
+            logger.info("exception in '%s'", self.name, exc_info=exc_info)
+            with safe_thread_lock:
+                if not first_exception_info:
+                    first_exception_info = sys.exc_info()
+        finally:
+            # Avoid a refcycle if the thread is running a function with
+            # an argument that has a member that points to the thread.
+            del self._target, self._args, self._kwargs
 
 
 class LineTimeout(Exception):
@@ -439,9 +463,7 @@ class Job(object):
             except Exception as e:
                 self.logger.error(e)
 
-        thread = threading.Thread(target=_kill, name="killer-%s" % self.job_id)
-        thread.daemon = True
-        thread.start()
+        SafeThread(target=_kill, name="killer-%s" % self.job_id, daemon=True).start()
         self.reset_timeout(new_timeout=graceful_timeout + 10)
 
 
@@ -451,7 +473,7 @@ class RebootJob(Job):
         super(RebootJob, self).__init__(*args, **kwargs)
 
     def start(self):
-        threading.Thread(target=self.reboot_host, name="Reboot").start()
+        SafeThread(target=self.reboot_host, name="Reboot").start()
 
     def reboot_host(self):
         with open(REBOOT_FILENAME, 'w') as f:
@@ -497,8 +519,6 @@ class TalkerAgent(object):
         self.output_lock = threading.RLock()
         self.redis = None
         self.host_id = None
-        self.redis_fetcher = None
-        self.redis_sender = None
         self.job_poller = None
         self.fds_poller = select.poll()
         self.fds_to_channels = {}
@@ -744,35 +764,24 @@ class TalkerAgent(object):
             else:
                 time.sleep(CYCLE_DURATION)
 
-    def start_worker(self, worker, name):
-
-        def safe_run():
-            try:
-                return worker()
-            except:  # noqa
-                self.exc_info = sys.exc_info()
-                logger.debug("exception in '%s'", name, exc_info=self.exc_info)
-
-        t = threading.Thread(target=safe_run, name=name)
-        t.daemon = True
-        t.start()
-        return t
-
     def start(self):
+        global first_exception_info
+        first_exception_info = None
+
         self.finalize_previous_session()
         if os.path.isfile(JOBS_SEEN):
             with open(JOBS_SEEN, "r") as f:
                 self.seen_jobs = json.load(f)
 
-        self.redis_fetcher = self.start_worker(self.fetch_new_jobs, name="RedisFetcher")
-        self.redis_sender = self.start_worker(self.sync_jobs_progress, name="JobProgress")
+        SafeThread(target=self.fetch_new_jobs, name="RedisFetcher", daemon=True).start()
+        SafeThread(target=self.sync_jobs_progress, name="JobProgress", daemon=True).start()
 
         while not self.stop_agent.is_set():
             if not self.get_jobs_outputs():
                 time.sleep(CYCLE_DURATION / 10.0)
-            if self.exc_info:
+            if first_exception_info:
                 logger.debug("re-raising exception from worker")
-                reraise(*self.exc_info)
+                reraise(*first_exception_info)
                 assert False, "exception should have been raised"
 
     def setup(self):
@@ -819,7 +828,7 @@ class TalkerAgent(object):
 
 
 def wait_proc(proc, timeout):
-    t = threading.Thread(target=proc.wait)
+    t = SafeThread(target=proc.wait, name='wait_proc')
     t.start()
     t.join(timeout)
     return not t.is_alive()
