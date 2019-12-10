@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Running diagnostics on startup and when uncaught exception occurs
 
+### Fixed
+- fix dict items iteration bug happening in python3
+
 ## [1.8.6] - 2019-11-05
 ### Added
 - Redis connection parameters in agent config file
