@@ -640,7 +640,7 @@ class TalkerAgent(object):
 
         requested_by.log("Some jobs not yet finished, setting exit code to 'reboot' and proceeding")
         with self.pipeline() as pipeline:
-            for job_id, job in self.current_processes.items():
+            for job_id, job in list(self.current_processes.items()):
                 if job_id == requested_by.job_id:
                     continue
                 job.set_result('reboot')
