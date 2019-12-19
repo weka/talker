@@ -523,6 +523,7 @@ class RebootJob(Job):
             self.log("Reboot with reboot cmd")
             proc = subprocess.Popen(['reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+        flush_logger()
         wait_proc(proc, timeout=60)
         time.sleep(60)
 
@@ -925,6 +926,15 @@ def set_logging_to_file(logpath):
     FILE_LOG_HANDLER = handler
 
     config.update('logging', logpath=logpath)
+
+
+def flush_logger():
+    if not FILE_LOG_HANDLER:
+        return
+
+    FILE_LOG_HANDLER.flush()
+    logfile_fd = FILE_LOG_HANDLER.stream.fileno()
+    os.fsync(logfile_fd)
 
 
 def setup_logging(verbose):
