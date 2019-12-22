@@ -33,14 +33,24 @@ def raise_file_not_found(*args, **kwargs):
     raise OSError(2, 'No such file or directory')
 
 
+class RebootMockException(Exception):
+    pass
+
+
+def reboot_mock_exception(*args):
+    raise RebootMockException("This is reboot mock exception")
+
+
 JOBS_DIR = '/tmp/talker/jobs'
 EXCEPTION_FILENAME = '/tmp/talker/last_exception'
 JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
+REBOOT_FILENAME = '/tmp/talker/reboot.id'
 
 
 @patch('talker_agent.talker.JOBS_DIR', JOBS_DIR)
 @patch('talker_agent.talker.JOBS_SEEN', JOBS_SEEN)
 @patch('talker_agent.talker.EXCEPTION_FILENAME', EXCEPTION_FILENAME)
+@patch('talker_agent.talker.REBOOT_FILENAME', REBOOT_FILENAME)
 class TestAgent(unittest.TestCase):
 
     def setUp(self):
@@ -167,3 +177,8 @@ class TestAgent(unittest.TestCase):
                 res = get_stdout(self.agent.redis, job_id)
                 expected_val = val.replace('\\n', '\n') * val_repeats
                 self.assertEqual(res, expected_val)
+
+    @patch('talker_agent.talker.RebootJob.reboot_host', reboot_mock_exception)
+    def test_safe_thread(self):
+        _ = self.run_cmd_on_agent('reboot', force=True)
+        self.assert_agent_exception(RebootMockException)
