@@ -15,7 +15,7 @@ matrix:
       env:
         - TEST_SUITE="tests/uts/test_client.py"
     - stage: agent unit tests
-      python: 2.7
+      python: 3.5
       env:
         - TEST_SUITE="tests/uts/test_agent.py"
     - stage: integration tests
@@ -45,9 +45,10 @@ install:
   - pip install .[test]
 deploy:
   provider: pypi
-  user: wekaio-pypi
+  user: __token__
   password:
-    secure: oJATvgDncF6BWrVwQERAkwzNwm5UYmLbEUdMMWEAReGhKjNC/FpmBVwtzvObWjkfXXKSWyCm+gc7bYX8GRDDtNLfO5PkOFaMIDS31cht9W7tbVbc8FHVDNZ0Z09ZQZzaEBUnSZQAJKTTa4pc0BcdJNzVABn5B5CxSPDz9S6rO5vFOQtQNpGqivUVF0BKSNce8Je5ZUvb5WwMuvTM2WeNDyPlwdcCsuwqSjgeprBWNd1+62bjoG9dKQz1R/yylzZ2aoQ8x4+SkTLbP9zewW5eNtVomz5PFXG3NLFJLU2aExpib1n8lbK6EmUCp+gDwR+sHAA49jbo6cm92N6scJ+TI6rsuPCRLHCIpxXrhp5/t/kETFq+y8FJgFDH0k9RLIwefjHUZuqxfbRs32v3gpZIUqwXB4jrCeY8IClfWW2WvPyfGaxoMMNKd8cr3s6ZzNrxhq091JcJHlBNGHX2ev6tyTSLy2eNqIo2ueZyrDmsVWYWT+VoeHWo/0q/F5SxxnuuwgraDvez/Fpontr2qIBKShwZoFpSEcs/m57nekVhtEiJEwtbYUapk5iLlC3iMELxnjvsEfCT/df/HWQvEuBAwX90nIxWRrGC8B7bfdKXBmUjJ/qBGsOrL0F+Gj8iQRKXl87rCN4GoGLG7XXDM5f/juNtcrhlU5zEDMslYgmw1Wg=
+    secure: IbmdvH5PFfU74iQjRgtx6/dMbQIv+kSQhxOmPsB3KA7NGWWSeSn2Vjm8kb457x5Tau/rZwG8z6Q2lbbkgylAZ2H9OWUMw60ZtPJK351EGdljLqSFoaFxg60U7a8+dwSjhX91bRgqNYLF03oviRgVloYc/8/1b84tGFVelAJ6khZE+Ll6ndsqEtsCh9zSkd+PMlOWYTOhxUZu5hYUfpnwN1acnfhuNjGBlqvqTIA9ErTOxt50g0EBUT0Mzlkq0Wb70RaT6NCAI5NHIz/ZyVnk8hANyldoiuCpMsxSCq/DcQClHRiSDBo3sf9Glkeqk/tN0L1ZCT+ADxOs529Sj0got8VtlLY/qXRnUD+KqDXCEvtoLoGQantaG/HsFvESEHCdGo9EqHtPjLvhRQDZC/DxwUmCV2qKjtlrv/UflDLEg3cBKlDjLFzUFiliwjcJ3/Z9ljX5nm7k8/v4e014kncH6lBH2/wj7VhSBJ+6RM4mcocQt6wGdnWoc+66CO8PHKsjdTvasEp4V0D1WJqZN5n4W21L5vnQnUgSJ27eS8OZxWfnFZpzUnc4o67N32IOVKoZgnSY2TV/KXkZj4usEevDDtimH9fXAqImCZPyXc7Um/hP7YOiINGci18fOUFniDpJEIUIpm9K0Eu3s0JoFU2t4YxT68D7oThWwwY8PVJi+JI=
+  skip_cleanup: true
   on:
     tags: true
     branch: master

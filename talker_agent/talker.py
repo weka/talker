@@ -1,22 +1,4 @@
-#!/usr/bin/python
-
-
-"""
-Talker Agent (Server-Side)
-==========================
-
-* Important:
-    - keep this free of dependencies (there's only a redis dependency)
-    - keep this compatible with python2.6+ (no dict comprehension)
-
-* Packaging:
-    - update the 'TALKER' version in version_info
-    - ./teka pack talker
-
-* Testing:
-    - See ./wepy/devops/talker.py (client-side)
-
-"""
+#!/usr/local/bin/python3
 
 import fcntl
 import json
@@ -34,48 +16,22 @@ import shutil
 import glob
 import atexit
 import random
-from textwrap import dedent
 from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
-try:
-    from configparser import ConfigParser
-except:  # python 2.7
-    from ConfigParser import ConfigParser
+from configparser import ConfigParser
+from threading import Lock
+
+import redis
 
 
-PY3 = sys.version_info[0] == 3
+def reraise(tp, value, tb=None):
+    if value is None:
+        value = tp()
+    if value.__traceback__ is not tb:
+        raise value.with_traceback(tb)
+    raise value
 
-# ===========================================================================================
-# Define a python2/3 compatible 'reraise' function for re-raising exceptions properly
-# Since the syntax is different and would not compile between versions, we need to using 'exec'
-
-if PY3:
-    def reraise(tp, value, tb=None):
-        if value is None:
-            value = tp()
-        if value.__traceback__ is not tb:
-            raise value.with_traceback(tb)
-        raise value
-else:
-    def exec_(_code_, _globs_=None, _locs_=None):
-        """Execute code in a namespace."""
-        if _globs_ is None:
-            frame = sys._getframe(1)
-            _globs_ = frame.f_globals
-            if _locs_ is None:
-                _locs_ = frame.f_locals
-            del frame
-        elif _locs_ is None:
-            _locs_ = _globs_
-        exec("""exec _code_ in _globs_, _locs_""")
-
-    exec_(dedent("""
-        def reraise(tp, value, tb=None):
-            raise tp, value, tb
-        """))
-
-# ===========================================================================================
 
 CONFIG_FILENAME = '/root/talker/config.ini'
 REBOOT_FILENAME = '/root/talker/reboot.id'
@@ -104,6 +60,29 @@ DEFAULT_GRACEFUL_TIMEOUT = 3
 JOBS_EXPIRATION = 15  # 20 * 60  # how long to keep job ids in the EOS registry (exactly-once-semantics)
 
 config = None
+first_exception_info = None
+safe_thread_lock = Lock()
+
+
+class SafeThread(threading.Thread):
+    def __init__(self, *, target, name, args=(), kwargs=None, daemon=None):
+        super().__init__(None, target, name, args, kwargs, daemon=daemon)
+        self.exc_info = None
+
+    def run(self):
+        global first_exception_info
+        try:
+            self._target(*self._args, **self._kwargs)
+        except:
+            exc_info = sys.exc_info()
+            logger.info("exception in '%s'", self.name, exc_info=exc_info)
+            with safe_thread_lock:
+                if not first_exception_info:
+                    first_exception_info = sys.exc_info()
+        finally:
+            # Avoid a refcycle if the thread is running a function with
+            # an argument that has a member that points to the thread.
+            del self._target, self._args, self._kwargs
 
 
 class LineTimeout(Exception):
@@ -304,7 +283,7 @@ class Job(object):
                         time.sleep(random.random() * 2)
                         continue
 
-                self.stderr.chunks.append(e.strerror)
+                self.stderr.chunks.append(e.strerror.encode('utf-8'))
                 self.set_result(e.errno)
                 self.finalize()
                 return
@@ -313,13 +292,7 @@ class Job(object):
 
         self.job_fn = "%s/job.%s.%s" % (JOBS_DIR, self.job_id, self.popen.pid)
         with open(self.job_fn, "w") as f:
-            try:
-                f.write(repr(self.cmd))
-            except IOError:
-                # to help with WEKAPP-74054
-                os.system("df")
-                os.system("df -i")
-                raise
+            f.write(repr(self.cmd))
 
         self.agent.current_processes[self.job_id] = self
         for channel in self.channels:
@@ -490,9 +463,7 @@ class Job(object):
             except Exception as e:
                 self.logger.error(e)
 
-        thread = threading.Thread(target=_kill, name="killer-%s" % self.job_id)
-        thread.daemon = True
-        thread.start()
+        SafeThread(target=_kill, name="killer-%s" % self.job_id, daemon=True).start()
         self.reset_timeout(new_timeout=graceful_timeout + 10)
 
 
@@ -502,7 +473,7 @@ class RebootJob(Job):
         super(RebootJob, self).__init__(*args, **kwargs)
 
     def start(self):
-        threading.Thread(target=self.reboot_host, name="Reboot").start()
+        SafeThread(target=self.reboot_host, name="Reboot").start()
 
     def reboot_host(self):
         with open(REBOOT_FILENAME, 'w') as f:
@@ -548,8 +519,6 @@ class TalkerAgent(object):
         self.output_lock = threading.RLock()
         self.redis = None
         self.host_id = None
-        self.redis_fetcher = None
-        self.redis_sender = None
         self.job_poller = None
         self.fds_poller = select.poll()
         self.fds_to_channels = {}
@@ -671,7 +640,7 @@ class TalkerAgent(object):
 
         requested_by.log("Some jobs not yet finished, setting exit code to 'reboot' and proceeding")
         with self.pipeline() as pipeline:
-            for job_id, job in self.current_processes.items():
+            for job_id, job in list(self.current_processes.items()):
                 if job_id == requested_by.job_id:
                     continue
                 job.set_result('reboot')
@@ -795,35 +764,24 @@ class TalkerAgent(object):
             else:
                 time.sleep(CYCLE_DURATION)
 
-    def start_worker(self, worker, name):
-
-        def safe_run():
-            try:
-                return worker()
-            except:  # noqa
-                self.exc_info = sys.exc_info()
-                logger.debug("exception in '%s'", name, exc_info=self.exc_info)
-
-        t = threading.Thread(target=safe_run, name=name)
-        t.daemon = True
-        t.start()
-        return t
-
     def start(self):
+        global first_exception_info
+        first_exception_info = None
+
         self.finalize_previous_session()
         if os.path.isfile(JOBS_SEEN):
             with open(JOBS_SEEN, "r") as f:
                 self.seen_jobs = json.load(f)
 
-        self.redis_fetcher = self.start_worker(self.fetch_new_jobs, name="RedisFetcher")
-        self.redis_sender = self.start_worker(self.sync_jobs_progress, name="JobProgress")
+        SafeThread(target=self.fetch_new_jobs, name="RedisFetcher", daemon=True).start()
+        SafeThread(target=self.sync_jobs_progress, name="JobProgress", daemon=True).start()
 
         while not self.stop_agent.is_set():
             if not self.get_jobs_outputs():
                 time.sleep(CYCLE_DURATION / 10.0)
-            if self.exc_info:
+            if first_exception_info:
                 logger.debug("re-raising exception from worker")
-                reraise(*self.exc_info)
+                reraise(*first_exception_info)
                 assert False, "exception should have been raised"
 
     def setup(self):
@@ -841,7 +799,6 @@ class TalkerAgent(object):
         health_check_interval = config.parser.getfloat('redis', 'health_check_interval')
 
         logger.info("Connecting to redis %s:%s", host, port)
-        import redis  # deferring so that importing talker (for ut) doesn't immediately fail if package not available
         self.redis = redis.StrictRedis(
             host=host, port=port, db=0, password=password,
             socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
@@ -871,7 +828,7 @@ class TalkerAgent(object):
 
 
 def wait_proc(proc, timeout):
-    t = threading.Thread(target=proc.wait)
+    t = SafeThread(target=proc.wait, name='wait_proc')
     t.start()
     t.join(timeout)
     return not t.is_alive()
@@ -940,10 +897,6 @@ def main(*args):
     config = Config()
     set_logging_to_file(config.parser.get('logging', 'logpath'))
 
-    # to help with WEKAPP-74054
-    os.system("df")
-    os.system("df -i")
-
     open("/var/run/talker.pid", "w").write(str(os.getpid()))
     atexit.register(os.unlink, "/var/run/talker.pid")
 
@@ -975,7 +928,4 @@ def main(*args):
 
 if __name__ == '__main__':
     args = sys.argv[1:]
-    if "--ut" in args:
-        print("Talker don't need no UT")
-    else:
-        sys.exit(main(*args))
+    sys.exit(main(*args))

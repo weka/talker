@@ -19,7 +19,6 @@ from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
     REDIS_HEALTH_CHECK_INTERVAL, _logger, _verbose_logger
 )
-from talker.semver import SemVer
 
 
 @locking_cache
@@ -57,7 +56,6 @@ class Talker(object):
         self._name = name or "anon"
         self._journal_saved = False
         self.reactor = TalkerReactor(self)
-        self.agent_version = SemVer.loads_fuzzy(agent_version or "0.")  # '0.' for when the agent is not-yet installed
         _logger.debug("%s: initialized", self)
 
     @property
@@ -172,7 +170,7 @@ class Talker(object):
             res_idx_to_i = {}
             res_idx = 0
             for cmd in cmds:
-                if cmd.ack_supported and cmd.ack is None:
+                if cmd.ack is None:
                     p.lpop(cmd._ack_key)
                     res_idx_to_i[res_idx] = cmd, 'ack'
                     res_idx += 1
@@ -289,7 +287,6 @@ class Talker(object):
                     _logger.info("Waiting on %s command(s) on %s host(s): %s", len(pending), len(hosts), ", ".join(hosts))
                     for cmd in pending:
                         since_started = (
-                            "no-ack" if not cmd.ack_supported else
                             "acked {:ago}".format(cmd.since_started) if cmd.ack else
                             "not-started")
                         _logger.debug("   job-id: %s (%s)", cmd.job_id, since_started)

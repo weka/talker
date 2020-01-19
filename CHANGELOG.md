@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- make all agent threads thread-safe
+- fix dict items iteration when doing reboot due to python3 changes
+
+## [1.8.7] - 2019-11-21
+### Changed
+- upgrade agent to run with python3
+- upgrade - redis==3.3.11
+- use main redis project (not forked) for agent
+- remove version dependency behavior
 
 ## [1.8.6] - 2019-11-05
 ### Added
