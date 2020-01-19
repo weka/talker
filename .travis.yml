@@ -1,57 +1,57 @@
 language: python
 matrix:
   include:
-    - stage: client unit tests
-      python: 3.4
-      env:
-        - TEST_SUITE="tests/uts/test_client.py"
-    - python: 3.5
-      env:
-        - TEST_SUITE="tests/uts/test_client.py"
-    - python: 3.6
-      env:
-        - TEST_SUITE="tests/uts/test_client.py"
-    - python: 3.7
-      env:
-        - TEST_SUITE="tests/uts/test_client.py"
-    - stage: agent unit tests
-      python: 2.7
-      env:
-        - TEST_SUITE="tests/uts/test_agent.py"
-    - stage: integration tests
-      python: 3.4
-      env:
-        - TEST_SUITE="tests/integration"
-      before_install:
-        - tests/integration/setup.sh
-    - python: 3.5
-      env:
-        - TEST_SUITE="tests/integration"
-      before_install:
-        - tests/integration/setup.sh
-    - python: 3.6
-      env:
-        - TEST_SUITE="tests/integration"
-      before_install:
-        - tests/integration/setup.sh
-    - python: 3.7
-      env:
-        - TEST_SUITE="tests/integration"
-      before_install:
-        - tests/integration/setup.sh
+  - stage: client unit tests
+    python: 3.4
+    env:
+    - TEST_SUITE="tests/uts/test_client.py"
+  - python: 3.5
+    env:
+    - TEST_SUITE="tests/uts/test_client.py"
+  - python: 3.6
+    env:
+    - TEST_SUITE="tests/uts/test_client.py"
+  - python: 3.7
+    env:
+    - TEST_SUITE="tests/uts/test_client.py"
+  - stage: agent unit tests
+    python: 2.7
+    env:
+    - TEST_SUITE="tests/uts/test_agent.py"
+  - stage: integration tests
+    python: 3.4
+    env:
+    - TEST_SUITE="tests/integration"
+    before_install:
+    - tests/integration/setup.sh
+  - python: 3.5
+    env:
+    - TEST_SUITE="tests/integration"
+    before_install:
+    - tests/integration/setup.sh
+  - python: 3.6
+    env:
+    - TEST_SUITE="tests/integration"
+    before_install:
+    - tests/integration/setup.sh
+  - python: 3.7
+    env:
+    - TEST_SUITE="tests/integration"
+    before_install:
+    - tests/integration/setup.sh
 script: pytest $TEST_SUITE -v
 dist: xenial
 install:
-  - pip install .[test]
+- pip install .[test]
 deploy:
   provider: pypi
-  user: wekaio-pypi
+  user: __token__
   password:
-    secure: oJATvgDncF6BWrVwQERAkwzNwm5UYmLbEUdMMWEAReGhKjNC/FpmBVwtzvObWjkfXXKSWyCm+gc7bYX8GRDDtNLfO5PkOFaMIDS31cht9W7tbVbc8FHVDNZ0Z09ZQZzaEBUnSZQAJKTTa4pc0BcdJNzVABn5B5CxSPDz9S6rO5vFOQtQNpGqivUVF0BKSNce8Je5ZUvb5WwMuvTM2WeNDyPlwdcCsuwqSjgeprBWNd1+62bjoG9dKQz1R/yylzZ2aoQ8x4+SkTLbP9zewW5eNtVomz5PFXG3NLFJLU2aExpib1n8lbK6EmUCp+gDwR+sHAA49jbo6cm92N6scJ+TI6rsuPCRLHCIpxXrhp5/t/kETFq+y8FJgFDH0k9RLIwefjHUZuqxfbRs32v3gpZIUqwXB4jrCeY8IClfWW2WvPyfGaxoMMNKd8cr3s6ZzNrxhq091JcJHlBNGHX2ev6tyTSLy2eNqIo2ueZyrDmsVWYWT+VoeHWo/0q/F5SxxnuuwgraDvez/Fpontr2qIBKShwZoFpSEcs/m57nekVhtEiJEwtbYUapk5iLlC3iMELxnjvsEfCT/df/HWQvEuBAwX90nIxWRrGC8B7bfdKXBmUjJ/qBGsOrL0F+Gj8iQRKXl87rCN4GoGLG7XXDM5f/juNtcrhlU5zEDMslYgmw1Wg=
+    secure: IbmdvH5PFfU74iQjRgtx6/dMbQIv+kSQhxOmPsB3KA7NGWWSeSn2Vjm8kb457x5Tau/rZwG8z6Q2lbbkgylAZ2H9OWUMw60ZtPJK351EGdljLqSFoaFxg60U7a8+dwSjhX91bRgqNYLF03oviRgVloYc/8/1b84tGFVelAJ6khZE+Ll6ndsqEtsCh9zSkd+PMlOWYTOhxUZu5hYUfpnwN1acnfhuNjGBlqvqTIA9ErTOxt50g0EBUT0Mzlkq0Wb70RaT6NCAI5NHIz/ZyVnk8hANyldoiuCpMsxSCq/DcQClHRiSDBo3sf9Glkeqk/tN0L1ZCT+ADxOs529Sj0got8VtlLY/qXRnUD+KqDXCEvtoLoGQantaG/HsFvESEHCdGo9EqHtPjLvhRQDZC/DxwUmCV2qKjtlrv/UflDLEg3cBKlDjLFzUFiliwjcJ3/Z9ljX5nm7k8/v4e014kncH6lBH2/wj7VhSBJ+6RM4mcocQt6wGdnWoc+66CO8PHKsjdTvasEp4V0D1WJqZN5n4W21L5vnQnUgSJ27eS8OZxWfnFZpzUnc4o67N32IOVKoZgnSY2TV/KXkZj4usEevDDtimH9fXAqImCZPyXc7Um/hP7YOiINGci18fOUFniDpJEIUIpm9K0Eu3s0JoFU2t4YxT68D7oThWwwY8PVJi+JI=
   on:
     tags: true
     branch: master
   skip_existing: true
 notifications:
   slack:
-    secure: jSvGUdxwajD0ERxNzqLQ9lIIbK0xLMN1+asXiED/NMUU7BHnX4SGYUltHN7RxXuPIcHX/zd9UhDTnXBZMEee8JQ2XEfJGrfsivWjG7EVL9tRoIjsorNhPOm+WZF7w8CQ23is1PlDDT7RjiGr/EtxaCDkq1evGqYPJwgpTXL8fMuHPdHMHGBjHMAGMavoR2u6ZtbSs3RZc0i/n5oqFiRRmhsuZIdRLKlMqDEyac0k1tpvZurJW3BmoZsXLYramXVXlKBZ5q5oTRAZF5XUFQIIfbxJRrTE2Bkk+CAiCA80RjRONgCykFQkgg/PcD+ZlobAAj1lbwfXmp7o/hv3bBruSQ/E+XmxN0BXS3QDoejxDqunm9N2WBivqc6mu8nOZUKmwY+pZVRglYA4xRwGo1ZJ2nmymmu1U44mgNUboea42Rl1DAJSbfdUFnqT9y1BLNNpepg8FUlqFRQYZxm4pGf1i2UCMXlp2Xvw7eVirdlz8ySUMSGDG/t9qm2TytSRL4MKlnoesjTDXhPGtjpubN86QjOrvmF/34MzjHe7lOagZNXlpOsSiQGl3tvo2lm6ln+QJCtqvWzE/qtDg+p3o1BMuvNPYrFG1lJkN636lvmErEZLOI9fSvRrpLf2deTqZ1+od9+iofJi8vSQRZXjLtfkcw+yyzddhegk4jJ6JNCBdJQ=
+    secure: pxpdYuQ/L/Naj+RpHJ7+JmxHs4sdl8vpZJCdgi9MuwaCqwskRnBz3/ySJHMn066BwszT3VsNBFddRBYdqT8o9MJrQiOv8dx+kY7RN4qGoYLymYJtDGugq5aMZMFV0JWE0ROJwRQBTAfUuESQ2MbaMiEQ1ohZ2LKm87NRRUG8A379sR214VZYhSUdtfPtSK5fbtNeVnT9sW+Lpz78Bv3mLE7ZzVBxrlU0SAT2lJl5VPOLgZLcy6mrvv7oyc3PpyoWUjlR/YPK4Anj7zItCbT3vnnDFw0Q0uHTjriyGJ4B4zVB8EgYbjFJS1N4jcY3PF9Z1sDNzp9pRyjUd1OSVUD3zynguvdv50Ug8WvuSGRAdFi6W+kfWBlaPlm7dRrkgx8f6rONE3fgrY+hCO4TN2YGnNNHHS+OniwTQ5/+oaRniElw6mVtdXzt0n5c0w3E6a6Gd7Okrbk7AXxSsi1qxPu+s5ptcvzzMeXEG/LPV6WmNRIiS/5wfszU4oiOtr0R2vyApBplFBMHDD6Ix0azfzgznq01o1R0wE4gOwnWKvvOEyYa/NlrHHKjjQNZWFr2JvHFrA/ObcloIeC+y6CuX+YWNaaMJDCoFaxaRkTp7d1CxgLCKV7uAbw+9jq/lnPiA9nLhPNmU81lZOYW/5a6guGwBcXAgqgnAv9hbpQkj4EMjxk=
