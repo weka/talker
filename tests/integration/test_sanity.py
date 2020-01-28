@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from talker_agent.talker import Config
@@ -9,6 +10,7 @@ class IntegrationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.host_id = Config('talker_agent/config.ini').parser.get('agent', 'host_id')
+        cls.diagnostics_script = Config('talker_agent/config.ini').parser.get('diagnostics', 'script_path')
 
     def setUp(self):
         super().setUp()
@@ -38,3 +40,36 @@ class IntegrationTest(unittest.TestCase):
             if expected_ret == 0:
                 res = get_stdout(self.client.redis, cmd.job_id)
                 self.assertEqual(res, val)
+
+    def test_on_startup_diagnostics(self):
+        # the expected result of the Dockerfile diagnostics script
+        default_output_filename = '/opt/diagnostics.txt'
+
+        result = self.client.run(self.host_id, 'bash', '-ce', 'ls {}'.format(default_output_filename)).result().strip()
+        self.assertEqual(result, default_output_filename)
+
+    def trigger_uncaught_exception(self):
+        # this illegal command will cause agent uncaught exception
+        self.client.redis.rpush("commands-%s" % self.host_id, json.dumps({'cmd': ['']}))
+        self.client.reset_server_error(self.host_id)
+
+    def test_uncaught_exception_diagnostics(self):
+        output_filename = 'test_uncaught_exception_diagnostics.txt'
+
+        self.client.run(
+            self.host_id, 'bash', '-ce',
+            'echo touch {output_filename} > {script_path}; chmod +x {script_path}'.format(
+                output_filename=output_filename, script_path=self.diagnostics_script)).result()
+
+        self.trigger_uncaught_exception()
+        result = self.client.run(self.host_id, 'bash', '-ce', 'ls {}'.format(output_filename)).result().strip()
+        self.assertEqual(result, output_filename)
+
+        #  check resilience of diagnostics on uncaught_exception
+        self.client.run(self.host_id, 'bash', '-ce', 'chmod 444 {}'.format(self.diagnostics_script)).result()
+        self.trigger_uncaught_exception()
+        self.client.run(self.host_id, 'bash', '-ce', 'true'.format(self.diagnostics_script)).result()
+
+        self.client.run(self.host_id, 'bash', '-ce', 'rm {}'.format(self.diagnostics_script)).result()
+        self.trigger_uncaught_exception()
+        self.client.run(self.host_id, 'bash', '-ce', 'true'.format(self.diagnostics_script)).result()

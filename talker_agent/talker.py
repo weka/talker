@@ -39,9 +39,9 @@ from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
 try:
-    from configparser import ConfigParser
+    from configparser import ConfigParser, NoSectionError
 except:  # python 2.7
-    from ConfigParser import ConfigParser
+    from ConfigParser import ConfigParser, NoSectionError
 
 
 PY3 = sys.version_info[0] == 3
@@ -870,6 +870,22 @@ class TalkerAgent(object):
             pass  # closed while processing data
 
 
+def run_diagnostics():
+    try:
+        script_path = config.parser.get('diagnostics', 'script_path')
+    except NoSectionError:
+        return
+
+    if os.path.isfile(script_path):
+        logger.info("Running diagnostics")
+        try:
+            subprocess.Popen(["bash", "-ce", script_path])
+        except:
+            logger.exception("Running diagnostics failed")
+    else:
+        logger.warning("Diagnostics script file does not exist")
+
+
 def wait_proc(proc, timeout):
     t = threading.Thread(target=proc.wait)
     t.start()
@@ -948,6 +964,7 @@ def main(*args):
     atexit.register(os.unlink, "/var/run/talker.pid")
 
     try:
+        run_diagnostics()
         agent = TalkerAgent()
         agent.setup()
         agent.start()
@@ -963,6 +980,9 @@ def main(*args):
                 f.writelines(format_exception(*sys.exc_info()))
         except:  # noqa
             pass
+
+        run_diagnostics()
+
         if not no_restart:
             logger.error("Uncaught exception - committing suicide, and restarting in 3 seconds")
             subprocess.Popen(["bash", "-ce", 'sleep 3 && service talker restart'])  # make sure this matches the pattern in 'install_talker()'

@@ -21,6 +21,7 @@ RUN chmod +x /etc/init.d/talker && \
     update-rc.d talker defaults
 
 COPY talker.py config.ini ./
+RUN echo touch /opt/diagnostics.txt > /opt/diagnostics.sh; chmod +x /opt/diagnostics.sh
 RUN chmod +x talker.py
 
 CMD service talker start && tail -f /dev/null
