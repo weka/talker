@@ -152,7 +152,7 @@ class Cmd(object):
         if wait_for_ack:
             self.wait(for_ack=True)
 
-        res = self.talker.reactor.get(self._pid_key, timeout=timeout)
+        res = self.talker.reactor.get(self._pid_key, timeout=timeout, _cmd_id=self.job_id)
         if res is None:
             if self.retcode is not None:
                 raise CommandAlreadyDone()
@@ -175,7 +175,7 @@ class Cmd(object):
         # a 5m expiration could fall exactly when we push a new command, causing it to expire before the agent pops it out;
         # a 1d expiration is long enough since new commands are likely to be pushed in the interim, extending the expiration
         # we can't call 'expire' before 'rpush', since it will be a no-op if the key doesn't exist yet
-        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT, _cmd_id=self.job_id)
         self.handling_timer = Timer(expiration=AGENT_SEND_TIMEOUT)
 
     @log_context(host="{.hostname}")
@@ -221,8 +221,8 @@ class Cmd(object):
             id=self.job_id,
             cmd="reset_timeout",
             new_timeout=self.timeout
-        )))
-        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
+        )), _cmd_id=self.job_id)
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT, _cmd_id=self.job_id)
 
     @log_context(host="{.hostname}")
     def send_signal(self, sig):
@@ -235,8 +235,8 @@ class Cmd(object):
             id=self.job_id,
             cmd="signal",
             signal=sig,
-        )))
-        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
+        )), _cmd_id=self.job_id)
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT, _cmd_id=self.job_id)
 
     @log_context(host="{.hostname}")
     def kill(self, graceful_timeout=3):
@@ -252,8 +252,8 @@ class Cmd(object):
             id=self.job_id,
             cmd="kill",
             graceful_timeout=graceful_timeout,
-        )))
-        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT)
+        )), _cmd_id=self.job_id)
+        self.talker.reactor.expire(self._commands_key, COMMANDS_KEY_TIMEOUT, _cmd_id=self.job_id)
 
     def _sync_timeout(self, line_timeout):
         if self._line_timeout_synced:
@@ -298,7 +298,7 @@ class Cmd(object):
             }
             res = self.talker.reactor.blpop(
                 [self._ack_key, self._stderr_key, self._stdout_key, self._exit_code_key],
-                timeout=blpop_timeout
+                timeout=blpop_timeout, _cmd_id=self.job_id
             )
             if not res:
                 if not self.ack:
@@ -548,14 +548,14 @@ class Cmd(object):
             return self.retcode
 
         if not self.ack:
-            ack = self.talker.reactor.lpop(self._ack_key)
+            ack = self.talker.reactor.lpop(self._ack_key, _cmd_id=self.job_id)
             if ack is None:
                 if check_client_timeout:
                     self.check_client_timeout()
                 return
             self.on_ack(ack)
 
-        exit_code = self.talker.reactor.lpop(self._exit_code_key)
+        exit_code = self.talker.reactor.lpop(self._exit_code_key, _cmd_id=self.job_id)
         if exit_code is None:
             if check_client_timeout:
                 self.check_client_timeout()
@@ -610,7 +610,8 @@ class Cmd(object):
                 else self.ack_timer.expiration // 10 if not self.ack
                 else self.client_timer.expiration // 10)
 
-            result = self.talker.reactor.blpop([self._exit_code_key, self._ack_key], timeout=blpop_timeout)
+            result = self.talker.reactor.blpop(
+                [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id)
             if result is None:
                 self.check_client_timeout()
                 continue
