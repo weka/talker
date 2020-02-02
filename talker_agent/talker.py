@@ -507,14 +507,11 @@ class RebootJob(Job):
     def reboot_host(self):
         with open(REBOOT_FILENAME, 'w') as f:
             f.write(self.job_id)
+            f.flush()
+            os.fsync(f.fileno())
+
         self.agent.current_processes[self.job_id] = self  # So results will be send by sender thread
         self.agent.stop_for_reboot(requested_by=self)
-
-        proc = subprocess.Popen(['sync'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if wait_proc(proc, 60):
-            self.log("Sync finished successfully")
-        else:
-            self.log("Sync timed out")
 
         self.log("Starting reboot")
         if self.force:
@@ -526,6 +523,7 @@ class RebootJob(Job):
             self.log("Reboot with reboot cmd")
             proc = subprocess.Popen(['reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
+        flush_logger()
         wait_proc(proc, timeout=60)
         time.sleep(60)
 
@@ -928,6 +926,15 @@ def set_logging_to_file(logpath):
     FILE_LOG_HANDLER = handler
 
     config.update('logging', logpath=logpath)
+
+
+def flush_logger():
+    if not FILE_LOG_HANDLER:
+        return
+
+    FILE_LOG_HANDLER.flush()
+    logfile_fd = FILE_LOG_HANDLER.stream.fileno()
+    os.fsync(logfile_fd)
 
 
 def setup_logging(verbose):
