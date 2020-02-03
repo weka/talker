@@ -33,12 +33,17 @@ class TalkerReactor():
         self._main_loop = concurrent(func=reactor_loop, threadname="TLKR-reactor")
         self._main_loop.start()
 
-    def _log_sent_items(self, items):
+    @staticmethod
+    def _log_sent_items(items):
         for item in items:
             if item.callback:
                 item.callback()
+
+            log_message = 'reactor sent command {}'.format(item.cmd)
             if item.cmd_id:
-                _verbose_logger.debug('reactor sent command: %s', item.cmd_id)
+                log_message = '{}: {}'.format(log_message, item.cmd_id)
+
+            _verbose_logger.debug(log_message)
 
     def _get_main_loop(self):
         while True:
