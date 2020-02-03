@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - agent syncs only reboot sentinel and log file before reboot
 - make all agent threads thread-safe
+- check recover from reboot only when there is no previous exception
+  <br/>or orphaned job
 
 ## [1.8.8] - 2020-01-28
 ### Added

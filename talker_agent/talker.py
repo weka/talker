@@ -702,15 +702,6 @@ class TalkerAgent(object):
                 job.finalize(pipeline)
 
     def finalize_previous_session(self):
-        if os.path.exists(REBOOT_FILENAME):
-            with open(REBOOT_FILENAME, 'r') as f:
-                job_id = f.read()
-                job = Job(id=job_id, cmd=None, agent=self)
-                job.logger.info("Recovered from reboot %s", job_id)
-                job.set_result(0)
-                job.finalize()
-            os.remove(REBOOT_FILENAME)
-
         self.pending_exception = None
         if os.path.exists(EXCEPTION_FILENAME):
             logger.info("Found exception from previous run")
@@ -729,6 +720,15 @@ class TalkerAgent(object):
                 job.set_result('orphaned')
                 job.finalize(pipeline=pipeline)
                 os.renames(fn, "%s/orphaned.%s.%s" % (JOBS_DIR, job_id, pid))
+
+        if os.path.exists(REBOOT_FILENAME):
+            with open(REBOOT_FILENAME, 'r') as f:
+                job_id = f.read()
+                job = Job(id=job_id, cmd=None, agent=self)
+                job.logger.info("Recovered from reboot %s", job_id)
+                job.set_result(0)
+                job.finalize()
+            os.remove(REBOOT_FILENAME)
 
     def start_job(self, job_data_raw):
         job_data = json.loads(job_data_raw)
