@@ -512,7 +512,7 @@ class RebootJob(Job):
 
         self.agent.current_processes[self.job_id] = self  # So results will be send by sender thread
         self.agent.stop_for_reboot(requested_by=self)
-
+        raise Exception('This is a reboot test exception')
         self.log("Starting reboot")
         if self.force:
             self.log("Reboot using sysrq")
