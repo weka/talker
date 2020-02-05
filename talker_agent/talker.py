@@ -325,7 +325,7 @@ class Job(object):
             attempts += 1
             try:
                 self.popen = subprocess.Popen([u"%s" % arg for arg in self.cmd], stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE, preexec_fn=os.setsid)
+                                              stderr=subprocess.PIPE, preexec_fn=os.setsid, close_fds=True)
             except OSError as e:
                 self.logger.error("OS Error:%s", e, exc_info=True)
 
@@ -546,10 +546,10 @@ class RebootJob(Job):
             self.log("Reboot using sysrq")
             proc = subprocess.Popen(
                 ['bash', '-ce', 'echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         else:
             self.log("Reboot with reboot cmd")
-            proc = subprocess.Popen(['reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.Popen(['reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 
         flush_logger()
         wait_proc(proc, timeout=60)
@@ -892,7 +892,7 @@ def run_diagnostics():
     if os.path.isfile(script_path):
         logger.info("Running diagnostics")
         try:
-            subprocess.Popen(["bash", "-ce", script_path])
+            subprocess.Popen(["bash", "-ce", script_path], close_fds=True)
         except:
             logger.exception("Running diagnostics failed")
     else:
@@ -1007,12 +1007,12 @@ def main(*args):
 
         if not no_restart:
             logger.error("Uncaught exception - committing suicide, and restarting in 3 seconds")
-            subprocess.Popen(["bash", "-ce", 'sleep 3 && service talker restart'])  # make sure this matches the pattern in 'install_talker()'
+            subprocess.Popen(["bash", "-ce", 'sleep 3 && service talker restart'], close_fds=True)  # make sure this matches the pattern in 'install_talker()'
         raise
     else:
         if not no_restart:
             logger.info("Restarting in 1 seconds")
-            subprocess.Popen(["bash", "-ce", 'sleep 1 && service talker restart'])  # make sure this matches the pattern in 'install_talker()'
+            subprocess.Popen(["bash", "-ce", 'sleep 1 && service talker restart'], close_fds=True)  # make sure this matches the pattern in 'install_talker()'
 
 
 if __name__ == '__main__':
