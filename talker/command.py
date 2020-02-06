@@ -458,6 +458,7 @@ class Cmd(object):
                 exception_cls = TalkerCommandLost if talker_alive else TalkerServerTimeout
                 self.raise_exception(exception_cls=exception_cls, timeout=self.ack_timer.elapsed)
         elif self.client_timer.expired:
+            _verbose_logger.debug("Client command timeout (%s)", self)
             self.raise_exception(
                 exception_cls=ClientCommandTimeoutError, timeout=self.ack_timer.elapsed, started=self.since_started
             )

@@ -72,6 +72,10 @@ class Talker(object):
             port=int(self._port)
         )
 
+    @property
+    def name(self):
+        return self._name
+
     @cached_property
     def redis(self):
         """
