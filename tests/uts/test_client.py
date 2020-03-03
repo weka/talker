@@ -12,7 +12,7 @@ from mock import patch
 
 from talker.client import get_talker
 from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone, \
-    TalkerServerTimeout
+    TalkerServerTimeout, TalkerCommandLost
 from tests.utils import get_version
 
 
@@ -41,6 +41,10 @@ def dummy_pipeline_flush_log(*args, **kwargs):
     :return:
     """
     pass
+
+
+def is_alive_mock(*args):
+    return True
 
 
 class TestClient(unittest.TestCase):
@@ -191,7 +195,7 @@ class TestClient(unittest.TestCase):
         self.delete_pid_key(cmd.job_id)
         self.assertRaises(CommandAlreadyDone, cmd.get_pid)
 
-    @patch('talker.command.IS_ALIVE_ACK_TIMEOUT', 0.01)
+    @patch('talker.client.IS_ALIVE_ACK_TIMEOUT', 0.01)
     def test_ack_timeout(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'sleep 20', ack_timeout=0.01)
         with self.assertRaises(TalkerServerTimeout) as exc:
@@ -200,3 +204,18 @@ class TestClient(unittest.TestCase):
         # The total timeout should actually be 2 * 0.01.
         # When we don't get ack we check if the machine is alive with ack_timeout=IS_ALIVE_ACK_TIMEOUT
         self.assertLess(exc.exception.timeout, 5)
+
+    @patch('talker.client.Talker.is_alive', is_alive_mock)
+    @patch('talker.client.IS_ALIVE_ACK_TIMEOUT', 0.01)
+    def test_command_lost(self):
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'sleep 20', ack_timeout=0.01)
+        self.assertRaises(TalkerCommandLost, cmd.result)
+
+    @patch('talker.client.Talker.is_alive', is_alive_mock)
+    def test_command_ack_delayed(self):
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'sleep 20', ack_timeout=0.01, timeout=0.1)
+        t = Thread(target=cmd.result)
+        t.start()
+        sleep(2)
+        self.mock_agent_response(cmd.job_id, '')
+        t.join()

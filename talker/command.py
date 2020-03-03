@@ -12,7 +12,7 @@ from easypy.timing import Timer
 
 from talker.config import (
     _logger, _verbose_logger, get_logger,
-    MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT, IS_ALIVE_ACK_TIMEOUT,IS_ALIVE_TIMEOUT,
+    MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT,
     AGENT_ACK_TIMEOUT, TALKER_COMMAND_LOST_RETRY_ATTEMPTS, COMMANDS_KEY_TIMEOUT
 )
 from talker.errors import (
@@ -440,13 +440,7 @@ class Cmd(object):
             if self.ack_timer.expired or self.client_timer.expired:
                 talker_alive = False
                 if self.name != is_talker_alive_name:  # prevent recursion
-                    try:
-                        self.talker.run(
-                            self.host_id, 'true', name=is_talker_alive_name,
-                            ack_timeout=IS_ALIVE_ACK_TIMEOUT, timeout=IS_ALIVE_TIMEOUT).wait()
-                    except TalkerServerTimeout:
-                        pass
-                    else:
+                    if self.talker.is_alive(self.host_id, is_talker_alive_name):
                         # check again, since talker may have just booted
                         self.poll(check_client_timeout=False)
                         if self.ack:

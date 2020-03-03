@@ -14,10 +14,10 @@ from easypy.humanize import compact
 
 from talker.reactor import TalkerReactor
 from talker.command import Cmd, RebootCmd
-from talker.errors import RedisTimeoutError
+from talker.errors import RedisTimeoutError, TalkerServerTimeout
 from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
-    REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger
+    REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger, IS_ALIVE_ACK_TIMEOUT, IS_ALIVE_TIMEOUT
 )
 
 
@@ -217,6 +217,24 @@ class Talker(object):
         :rtype: bool
         """
         return len(list(filter(lambda i: i is None, self.poll(cmds)))) == 0
+
+    def is_alive(self, host_id, name='is_alive'):
+        """
+        Do a naive check to see if the agent is responsive.
+        If the function returns False it doesn't mean for sure that the agent/machine is down
+
+        :param [str] host_id: The ID of the host to send the command to
+        :param [str] name: A name to give to the command (for logging pruposes)
+        :return: True if we get ack, False otherwise
+        :rtype: bool
+        """
+
+        cmd = self.run(host_id, 'true', name=name, timeout=IS_ALIVE_TIMEOUT, ack_timeout=IS_ALIVE_ACK_TIMEOUT)
+        try:
+            cmd.wait()
+        except TalkerServerTimeout:
+            pass
+        return bool(cmd.ack)
 
     def wait(self, cmds, sleep=0.5, timeout=DAY, initial_log_interval=12):
         """
