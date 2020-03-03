@@ -11,7 +11,8 @@ from fakeredis import FakeStrictRedis
 from mock import patch
 
 from talker.client import get_talker
-from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone
+from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone, \
+    TalkerServerTimeout
 from tests.utils import get_version
 
 
@@ -189,3 +190,13 @@ class TestClient(unittest.TestCase):
         self.assertEqual(res, 'hello\n')
         self.delete_pid_key(cmd.job_id)
         self.assertRaises(CommandAlreadyDone, cmd.get_pid)
+
+    @patch('talker.command.IS_ALIVE_ACK_TIMEOUT', 0.01)
+    def test_ack_timeout(self):
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'sleep 20', ack_timeout=0.01)
+        with self.assertRaises(TalkerServerTimeout) as exc:
+            cmd.result()
+
+        # The total timeout should actually be 2 * 0.01.
+        # When we don't get ack we check if the machine is alive with ack_timeout=IS_ALIVE_ACK_TIMEOUT
+        self.assertLess(exc.exception.timeout, 5)

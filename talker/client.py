@@ -17,7 +17,7 @@ from talker.command import Cmd, RebootCmd
 from talker.errors import RedisTimeoutError
 from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
-    REDIS_HEALTH_CHECK_INTERVAL, _logger, _verbose_logger
+    REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger
 )
 
 
@@ -95,6 +95,7 @@ class Talker(object):
 
     def run(self, host_id, *args,
             name=None,
+            ack_timeout=AGENT_ACK_TIMEOUT,
             timeout=HOUR,
             server_timeout=True,
             line_timeout=None,
@@ -108,6 +109,7 @@ class Talker(object):
         :param [str] host_id: The ID of the host to send the command to
         :param [List[str]] args: The command to run on the host (e.g. 'echo', 'hello')
         :param [str] name: A name to give to the command (for logging pruposes)
+        :param [int, float] ack_timeout: Agent ack timeout in seconds
         :param [int, float] timeout: Command timeout in seconds
         :param [int, float] server_timeout: Command timeout in seconds to be enforced in the agent
         :param [int, float] line_timeout: Command output timeout in seconds
@@ -130,7 +132,7 @@ class Talker(object):
         cmd = Cmd(
             talker=self, host_id=host_id, raise_on_failure=raise_on_failure,
             line_timeout=line_timeout, log_file=log_file,
-            args=args, timeout=timeout, server_timeout=server_timeout, name=name,
+            args=args, ack_timeout=ack_timeout, timeout=timeout, server_timeout=server_timeout, name=name,
             max_output_per_channel=max_output_per_channel, set_new_logpath=set_new_logpath)
         cmd.send()
         return cmd

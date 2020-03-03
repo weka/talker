@@ -7,6 +7,8 @@ from easypy.threadtree import ThreadContexts
 
 AGENT_SEND_TIMEOUT = 2 * MINUTE  # the duration we allow the client for sending our command to redis
 AGENT_ACK_TIMEOUT = 20 * MINUTE  # the duration we allow the server/agent to receive and start our commands
+IS_ALIVE_ACK_TIMEOUT = 5
+IS_ALIVE_TIMEOUT = 5
 MAX_OUTPUT_PER_CHANNEL = MiB * 10
 
 # needs to be below AGENT_SEND_TIMEOUT, so that we don't confuse a redis timeout with a reactor timeout
