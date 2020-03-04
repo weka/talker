@@ -6,13 +6,14 @@ import uuid
 from threading import Thread
 from time import sleep, time
 
+from easypy.concurrency import initialize_exception_listener
 from easypy.units import Duration
 from fakeredis import FakeStrictRedis
 from mock import patch
 
 from talker.client import get_talker
 from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone, \
-    TalkerServerTimeout, TalkerCommandLost
+    TalkerServerTimeout, TalkerCommandLost, RedisConnectionError
 from tests.utils import get_version
 
 
@@ -219,3 +220,14 @@ class TestClient(unittest.TestCase):
         sleep(2)
         self.mock_agent_response(cmd.job_id, '')
         t.join()
+
+    def test_redis_connection_timeout(self):
+        initialize_exception_listener()  # needed in order to make the exception be raised in main thread
+
+        self.client.redis = FakeStrictRedis(connected=False)
+
+        with self.assertRaises(RedisConnectionError):
+            self.client.run(self.host_id, 'bash', '-ce', 'true')
+            sleep(0.1)  # we need a small sleep until the thread gets to the exception
+
+        self.client.redis = FakeStrictRedis()

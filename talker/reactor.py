@@ -5,11 +5,13 @@ from functools import partial
 from queue import Queue, Empty
 from threading import RLock, Event, Semaphore
 
+import redis.exceptions
+
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
 from easypy.timing import wait, Timer
 from easypy.units import MINUTE
 
-from talker.errors import NoResponseForRedisCommand
+from talker.errors import NoResponseForRedisCommand, RedisConnectionError
 from talker.config import _logger, _verbose_logger, REDIS_SOCKET_TIMEOUT
 
 
@@ -67,7 +69,11 @@ class TalkerReactor():
                 for item in items:
                     redis_func = getattr(pipeline, item.cmd)
                     redis_func(*item.args, **item.kwargs)
-                results = pipeline.execute()
+
+                with RedisConnectionError.on_exception(
+                        redis.exceptions.ConnectionError, redis=self.talker.redis, commands=pipeline.command_stack):
+                    results = pipeline.execute()
+
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
                 self._log_sent_items(items)  # logs to debug WEKAPP-35305
                 for item, result in zip(items, results):
