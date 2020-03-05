@@ -42,6 +42,7 @@ matrix:
 script: pytest $TEST_SUITE -v
 dist: xenial
 install:
+- pip install --upgrade pip
 - pip install .[test]
 deploy:
   provider: pypi
