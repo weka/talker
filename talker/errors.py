@@ -88,3 +88,7 @@ class RedisTimeoutError(TException):
 
 class NoResponseForRedisCommand(TException, PredicateNotSatisfied):
     template = "No response for redis command within timeout: {cmd}"
+
+
+class RedisConnectionError(TException):
+    template = "Connection error while communicating with Talker Redis"
