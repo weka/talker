@@ -12,7 +12,7 @@ from easypy.timing import Timer
 
 from talker.config import (
     _logger, _verbose_logger, get_logger,
-    MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT, TALKER_CONTEXT,
+    MAX_OUTPUT_PER_CHANNEL, JOB_PID_TIMEOUT, AGENT_SEND_TIMEOUT,
     AGENT_ACK_TIMEOUT, TALKER_COMMAND_LOST_RETRY_ATTEMPTS, COMMANDS_KEY_TIMEOUT
 )
 from talker.errors import (
@@ -42,6 +42,7 @@ class Cmd(object):
     :param [bool] raise_on_failure: Should the command raise an exception on failure
     :param [Tuple[int]] retcode: What return codes are considered success
     :param [List[str]] args: List of the command arguments
+    :param [int, float] ack_timeout: Agent ack timeout in seconds
     :param [float, int] timeout: Command timeout in seconds
     :param [float, int] server_timeout: Command timeout on the agent in seconds
     :param [float, int] line_timeout: Command output timeout in seconds
@@ -57,6 +58,7 @@ class Cmd(object):
                  raise_on_failure=True,
                  retcode=(0,),
                  args=None,
+                 ack_timeout=AGENT_ACK_TIMEOUT,
                  timeout=HOUR,
                  server_timeout=True,
                  line_timeout=None,
@@ -80,6 +82,7 @@ class Cmd(object):
         self.hostname = host_id.partition('.')[-1]
         self.ack_timer = None
         self.handling_timer = None
+        self.ack_timeout = ack_timeout
         self.timeout = timeout or HOUR  # No command should run over hour, unless specified explicitly
         self.server_timeout = server_timeout
         self.line_timeout = Duration(line_timeout) if line_timeout else None
@@ -199,7 +202,7 @@ class Cmd(object):
 
     def on_sent(self):
         if not self.ack_timer:
-            self.ack_timer = Timer(expiration=TALKER_CONTEXT.ack_timeout)  # this is expiration on the agent ack'ing the command
+            self.ack_timer = Timer(expiration=self.ack_timeout)  # this is expiration on the agent ack'ing the command
 
     @property
     def is_sent(self):
@@ -437,11 +440,7 @@ class Cmd(object):
             if self.ack_timer.expired or self.client_timer.expired:
                 talker_alive = False
                 if self.name != is_talker_alive_name:  # prevent recursion
-                    try:
-                        self.talker.run(self.host_id, 'true', name=is_talker_alive_name, timeout=5).wait()
-                    except TalkerServerTimeout:
-                        pass
-                    else:
+                    if self.talker.is_alive(self.host_id, is_talker_alive_name):
                         # check again, since talker may have just booted
                         self.poll(check_client_timeout=False)
                         if self.ack:

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - sync all files before reboot
 
+### Added
+- add support for client to pass ack_timeout
+- add is_alive to client api
+
 ## [1.8.9] - 2020-02-05
 ### Fixed
 - agent syncs only reboot sentinel and log file before reboot
