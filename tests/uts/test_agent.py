@@ -170,7 +170,7 @@ class TestAgent(unittest.TestCase):
             job_id = self.run_cmd_on_agent(
                 ['bash', '-ce', 'python -c "import sys; sys.stdout.write(\'{}\' * {})"'.format(val, val_repeats)],
                 **kwargs)
-            retcode = get_retcode(self.agent.redis, job_id, timeout=3)
+            retcode = get_retcode(self.agent.redis, job_id, timeout=0)
             self.assertEqual(retcode, expected_ret)
 
             if expected_ret == '0':
