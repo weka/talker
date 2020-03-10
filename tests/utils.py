@@ -1,8 +1,8 @@
 import subprocess
+from time import sleep, time
 
 from fakeredis import FakeStrictRedis
 
-from time import sleep, time
 
 def get_container_id(container_name):
     return subprocess.check_output(
@@ -93,3 +93,42 @@ def get_retcode(redis, job_id, timeout=1):
 
 def get_stdout(redis, job_id, timeout=1):
     return get_blpop_value(redis, 'result-{}-stdout'.format(job_id), timeout)
+
+
+def configure_logging():
+    import logging.config
+    import os
+
+    log_folder = 'tmp'
+    if not os.path.isdir(log_folder):
+        os.makedirs(log_folder)
+
+    configuration = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'formatters': {
+            'detailed': {
+                'format': '%(asctime)s|%(process)2s:%(threadName)-25s|%(name)-40s|%(levelname)-5s|'
+                          '%(funcName)-30s |%(host)-35s|%(message)s',
+            }
+        },
+        'handlers': {
+            'main_file': {
+                'class': 'logging.handlers.RotatingFileHandler',
+                'filename': os.path.join(log_folder, 'test.log'),
+                'mode': 'w',
+                'formatter': 'detailed',
+                'level': 'DEBUG',
+                'maxBytes': 2 ** 20 * 10,
+                'delay': True,
+                'encoding': 'utf-8',
+            }
+        },
+        'root': {
+            'level': 'NOTSET',
+            'handlers': ['main_file']
+        },
+
+    }
+
+    logging.config.dictConfig(configuration)
