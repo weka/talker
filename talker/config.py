@@ -29,7 +29,3 @@ _verbose_logger = logging.getLogger(__name__ + ".verbose")
 
 def get_logger():
     return _verbose_logger if TALKER_CONTEXT.talker_quiet else _logger
-
-
-def ack_timeout(timeout):
-    return TALKER_CONTEXT(ack_timeout=timeout)

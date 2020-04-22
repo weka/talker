@@ -12,6 +12,7 @@ from fakeredis import FakeStrictRedis
 from mock import patch
 
 from talker.client import get_talker
+from talker.config import AGENT_ACK_TIMEOUT
 from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone, \
     TalkerServerTimeout, TalkerCommandLost, RedisConnectionError
 from tests.utils import get_version
@@ -231,3 +232,11 @@ class TestClient(unittest.TestCase):
             sleep(0.1)  # we need a small sleep until the thread gets to the exception
 
         self.client.redis = FakeStrictRedis()
+
+    def test_ack_timeout_value(self):
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello', ack_timeout=None)
+        self.assertEqual(cmd.ack_timeout, AGENT_ACK_TIMEOUT)
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello')
+        self.assertEqual(cmd.ack_timeout, AGENT_ACK_TIMEOUT)
+        cmd = self.client.run(self.host_id, 'bash', '-ce', 'echo hello', ack_timeout=1)
+        self.assertEqual(cmd.ack_timeout, 1)

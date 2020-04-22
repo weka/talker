@@ -82,7 +82,7 @@ class Cmd(object):
         self.hostname = host_id.partition('.')[-1]
         self.ack_timer = None
         self.handling_timer = None
-        self.ack_timeout = ack_timeout
+        self.ack_timeout = ack_timeout or AGENT_ACK_TIMEOUT
         self.timeout = timeout or HOUR  # No command should run over hour, unless specified explicitly
         self.server_timeout = server_timeout
         self.line_timeout = Duration(line_timeout) if line_timeout else None
