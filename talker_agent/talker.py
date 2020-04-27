@@ -140,10 +140,6 @@ class LineTimeout(Exception):
     pass
 
 
-class JobHanging(Exception):
-    pass
-
-
 class JobTimeout(Exception):
     pass
 
@@ -290,7 +286,6 @@ class Job(object):
         self.channels = (self.stdout, self.stderr)
 
         self.exit_code = None
-        self.killed_by = False
         self.last_send = 0
         self.agent = agent
         self.start_time = time.time()
@@ -400,8 +395,6 @@ class Job(object):
             pass
         elif self.timeout_at > now:
             pass
-        elif self.killed_by:
-            raise JobHanging()
         else:
             raise JobTimeout()
 
@@ -479,10 +472,6 @@ class Job(object):
         elif self.exit_code is None:
             try:
                 self.check_timed_out()
-            except JobHanging:
-                self.logger.error("Job did not die")
-                self.set_result('hanging')
-                self.finalize(pipeline)
             except JobTimeout:
                 self.logger.error("Job timed out")
                 self.set_result('timeout')
@@ -511,17 +500,15 @@ class Job(object):
 
         def _kill():
             try:
-                self.killed_by = signal.SIGTERM
                 self.send_signal(signal.SIGTERM)
                 time.sleep(graceful_timeout)
                 if self.popen.poll() is None:
-                    self.killed_by = signal.SIGKILL
                     self.send_signal(signal.SIGKILL)
             except Exception as e:
                 self.logger.error(e)
 
         SafeThread(target=_kill, name="killer-%s" % self.job_id, daemon=True).start()
-        self.reset_timeout(new_timeout=graceful_timeout + 10)
+        self.reset_timeout()
 
 
 class RebootJob(Job):
