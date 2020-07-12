@@ -84,6 +84,7 @@ EXCEPTION_FILENAME = '/root/talker/last_exception'
 VERSION_FILENAME = '/root/talker/version'
 JOBS_DIR = '/root/talker/jobs'
 JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
+JOBS_SEEN_TMP = JOBS_SEEN + '.tmp'
 
 logger = getLogger()
 
@@ -642,8 +643,14 @@ class TalkerAgent(object):
         # for back-compat with python2.6, we don't use dict-comprehension or tuple unpacking
         self.seen_jobs = dict((job_id, last_seen) for job_id, last_seen in self.seen_jobs.items() if (now - last_seen) < JOBS_EXPIRATION)
         logger.debug("Dumping seen-jobs registry (%s items)", len(self.seen_jobs))
-        with open(JOBS_SEEN, "w") as f:
+        with open(JOBS_SEEN_TMP, "w") as f:
+            # sudden reboot may corrupt this file
+            # the safe approach is to write into a temp file and then rename (-atomic) it
             json.dump(self.seen_jobs, f)
+            f.flush()
+            os.fsync(f.fileno())
+
+        os.rename(JOBS_SEEN_TMP, JOBS_SEEN)
         self.last_scrubbed = now
 
     def reset_timeout(self, job_id, new_timeout=None, delayed=False):
@@ -829,7 +836,11 @@ class TalkerAgent(object):
         self.finalize_previous_session()
         if os.path.isfile(JOBS_SEEN):
             with open(JOBS_SEEN, "r") as f:
-                self.seen_jobs = json.load(f)
+                try:
+                    self.seen_jobs = json.load(f)
+                except ValueError:
+                    logger.debug("Couldn't read %s, removing file", JOBS_SEEN)
+                    os.remove(JOBS_SEEN)
 
         SafeThread(target=self.fetch_new_jobs, name="RedisFetcher", daemon=True).start()
         SafeThread(target=self.sync_jobs_progress, name="JobProgress", daemon=True).start()
