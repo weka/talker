@@ -18,7 +18,7 @@ from talker.config import (
 from talker.errors import (
     CommandTimeout, UnknownChannel, TalkerCommandLost, HostDidNotRecover, HostStillAlive,
     TalkerClientSendTimeout, TalkerServerTimeout, ClientCommandTimeoutError, CommandTimeoutError,
-    CommandAbortedByReboot, CommandAbortedByOverflow, CommandHanging, CommandOrphaned,
+    CommandAbortedByReboot, CommandAbortedByOverflow, CommandOrphaned,
     CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone
 )
 
@@ -471,8 +471,6 @@ class Cmd(object):
             self.raise_exception(exception_cls=CommandAbortedByReboot)
         if self.aborted_by == AbortedBy.overflowed:
             self.raise_exception(exception_cls=CommandAbortedByOverflow, max_output_per_channel=self.max_output_per_channel)
-        if self.aborted_by == AbortedBy.hanging:
-            self.raise_exception(exception_cls=CommandHanging)
         if self.aborted_by == AbortedBy.orphaned:
             self.raise_exception(exception_cls=CommandOrphaned)
         if self.aborted_by == AbortedBy.line_timeout:

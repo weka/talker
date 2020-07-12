@@ -42,10 +42,6 @@ class TalkerError(CommandExecutionError):
     template = "Talker agent encountered an error: `{_exception}`"
 
 
-class CommandHanging(CommandExecutionError):
-    template = "Command killed but did not die: {name}"
-
-
 class ClientCommandTimeoutError(CommandExecutionError):
     template = "Command timed out after {timeout!r}: {name} - probably hanging on the host"
 
