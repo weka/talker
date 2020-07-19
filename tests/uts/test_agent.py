@@ -44,11 +44,13 @@ def reboot_mock_exception(*args):
 JOBS_DIR = '/tmp/talker/jobs'
 EXCEPTION_FILENAME = '/tmp/talker/last_exception'
 JOBS_SEEN = os.path.join(JOBS_DIR, 'eos.json')
+JOBS_SEEN_TMP = JOBS_SEEN + '.tmp'
 REBOOT_FILENAME = '/tmp/talker/reboot.id'
 
 
 @patch('talker_agent.talker.JOBS_DIR', JOBS_DIR)
 @patch('talker_agent.talker.JOBS_SEEN', JOBS_SEEN)
+@patch('talker_agent.talker.JOBS_SEEN_TMP', JOBS_SEEN_TMP)
 @patch('talker_agent.talker.EXCEPTION_FILENAME', EXCEPTION_FILENAME)
 @patch('talker_agent.talker.REBOOT_FILENAME', REBOOT_FILENAME)
 class TestAgent(unittest.TestCase):
