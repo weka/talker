@@ -79,7 +79,7 @@ class TalkerProcessLineTimedOut(TException):
 
 
 class RedisTimeoutError(TException):
-    template = "Talker's redis server connection timed out"
+    template = "Talker's redis server connection timed out {talker}"
 
 
 class NoResponseForRedisCommand(TException, PredicateNotSatisfied):
@@ -87,4 +87,4 @@ class NoResponseForRedisCommand(TException, PredicateNotSatisfied):
 
 
 class RedisConnectionError(TException):
-    template = "Connection error while communicating with Talker Redis"
+    template = "Connection error while communicating with Talker Redis {talker}"
