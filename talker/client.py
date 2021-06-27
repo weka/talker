@@ -14,7 +14,7 @@ from easypy.humanize import compact
 
 from talker.reactor import TalkerReactor
 from talker.command import Cmd, RebootCmd
-from talker.errors import RedisTimeoutError, TalkerServerTimeout
+from talker.errors import RedisTimeoutError, TalkerServerTimeout, CommandTimeoutError, ClientCommandTimeoutError
 from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
     REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger, IS_ALIVE_ACK_TIMEOUT, IS_ALIVE_TIMEOUT
@@ -232,7 +232,9 @@ class Talker(object):
         cmd = self.run(host_id, 'true', name=name, timeout=IS_ALIVE_TIMEOUT, ack_timeout=IS_ALIVE_ACK_TIMEOUT)
         try:
             cmd.wait()
-        except TalkerServerTimeout:
+        except CommandTimeoutError:
+            return True
+        except (TalkerServerTimeout, ClientCommandTimeoutError):
             pass
         return bool(cmd.ack)
 
