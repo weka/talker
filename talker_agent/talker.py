@@ -546,6 +546,15 @@ class RebootJob(Job):
         wait_proc(proc, timeout=60)
         time.sleep(60)
 
+        proc_result = dict()
+        communicate_proc(proc, 0.01, proc_result)
+        proc_stdout = proc_result.get('stdout')
+        proc_stderr = proc_result.get('stderr')
+        if proc_stdout:
+            self.log('Reboot stdout: %s', proc_stdout)
+        if proc_stderr:
+            self.log('Reboot stderr: %s', proc_stderr)
+
         self.log("Talker still alive, raising HostStillAlive(1)")
         time.sleep(1)  # Giving chance to report message
         self.set_result(1)
@@ -905,6 +914,19 @@ def wait_proc(proc, timeout):
     t.start()
     t.join(timeout)
     return not t.is_alive()
+
+
+def communicate_proc(proc, timeout, proc_result):
+    def target(result):
+        stdout, stderr = proc.communicate()
+        result['stdout'] = stdout.decode('utf-8').strip()
+        result['stderr'] = stderr.decode('utf-8').strip()
+
+    t = SafeThread(target=target, name='proc_output', args=(proc_result,))
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        logger.error("Reboot didn't finish")
 
 
 def handle_exception(*exc_info):
