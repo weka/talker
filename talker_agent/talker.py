@@ -526,7 +526,7 @@ class RebootJob(Job):
         self.agent.current_processes[self.job_id] = self  # So results will be send by sender thread
         self.agent.stop_for_reboot(requested_by=self)
 
-        proc = subprocess.Popen(['sync'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(['bash', '-ce', 'sync'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if wait_proc(proc, 60):
             self.log("Sync finished successfully")
         else:
@@ -540,7 +540,7 @@ class RebootJob(Job):
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
         else:
             self.log("Reboot with reboot cmd")
-            proc = subprocess.Popen(['reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+            proc = subprocess.Popen(['bash', '-ce', 'reboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 
         flush_logger()
         wait_proc(proc, timeout=60)
@@ -917,12 +917,12 @@ def wait_proc(proc, timeout):
 
 
 def communicate_proc(proc, timeout, proc_result):
-    def target(result):
+    def target():
         stdout, stderr = proc.communicate()
-        result['stdout'] = stdout.decode('utf-8').strip()
-        result['stderr'] = stderr.decode('utf-8').strip()
+        proc_result['stdout'] = stdout.decode('utf-8').strip()
+        proc_result['stderr'] = stderr.decode('utf-8').strip()
 
-    t = SafeThread(target=target, name='proc_output', args=(proc_result,))
+    t = SafeThread(target=target, name='proc_output')
     t.start()
     t.join(timeout)
     if t.is_alive():
