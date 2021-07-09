@@ -5,6 +5,7 @@ import unittest
 import uuid
 from threading import Thread
 from time import sleep, time
+from typing import Union
 
 from easypy.concurrency import initialize_exception_listener
 from easypy.units import Duration
@@ -13,7 +14,8 @@ from mock import patch
 
 from talker.client import get_talker
 from talker.config import AGENT_ACK_TIMEOUT
-from talker.errors import ClientCommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, CommandAlreadyDone, \
+from talker.errors import ClientCommandTimeoutError, CommandTimeoutError, CommandExecutionError, CommandPidTimeoutError, \
+    CommandAlreadyDone, \
     TalkerServerTimeout, TalkerCommandLost, RedisConnectionError
 from tests.utils import get_version
 
@@ -63,7 +65,7 @@ class TestClient(unittest.TestCase):
 
     def mock_agent_response(
             self, job_id: str, stdout_val: str = '', stderr_val: str = '',
-            retcode: int = 0, pid: str = '1234', delay: float = None):
+            retcode: Union[int, str] = 0, pid: str = '1234', delay: float = None):
 
         self.mock_agent_ack(job_id)
         self.redis.set('result-{}-pid'.format(job_id), pid)
@@ -124,12 +126,18 @@ class TestClient(unittest.TestCase):
         self.assertEqual(ret, 0)
         self.assertAlmostEqual(after - before, delay, delta=delay * 0.1)
 
-    def test_timeout_error(self):
+    def test_client_timeout_error(self):
         delay = 5
         cmd = self.client.run(
             self.host_id, 'bash', '-ce', 'sleep {}'.format(delay), timeout=delay * 0.0001, server_timeout=False)
         self.deferred_agent_response_mock(job_id=cmd.job_id, delay=delay)
         self.assertRaises(ClientCommandTimeoutError, cmd.wait)
+
+    def test_agent_timeout_error(self):
+        cmd = self.client.run(
+            self.host_id, 'bash', '-ce', 'true', timeout=5, server_timeout=False)
+        self.mock_agent_response(cmd.job_id, retcode='timeout')
+        self.assertRaises(CommandTimeoutError, cmd.wait)
 
     def test_command_fail(self):
         cmd = self.client.run(self.host_id, 'bash', '-ce', 'exit 2')
