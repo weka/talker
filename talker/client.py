@@ -232,9 +232,11 @@ class Talker(object):
         cmd = self.run(host_id, 'true', name=name, timeout=IS_ALIVE_TIMEOUT, ack_timeout=IS_ALIVE_ACK_TIMEOUT)
         try:
             cmd.wait()
-        except CommandTimeoutError:
+        except CommandTimeoutError as exc:
+            _logger.debug('%s:is_alive resulted with %s returning true', cmd.job_id, exc.__class__.__name__)
             return True
-        except (TalkerServerTimeout, ClientCommandTimeoutError):
+        except (TalkerServerTimeout, ClientCommandTimeoutError) as exc:
+            _logger.debug('%s:is_alive resulted with %s ignoring ...', cmd.job_id, exc.__class__.__name__)
             pass
         return bool(cmd.ack)
 
