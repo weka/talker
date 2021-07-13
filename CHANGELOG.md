@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- improve reactor pipeline execution error handling
+- add missing 'bash -ce' to sync and reboot in 'reboot_host'
+- make client is_alive resilient
+
+### Added
+- log talker reboot stdout and stderr in case reboot didn't complete
 
 ## [1.9.1] - 2020-07-19
 ### Fixed
