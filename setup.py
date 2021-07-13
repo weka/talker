@@ -23,7 +23,7 @@ setuptools.setup(
     extras_require={
         "dev": ["ipython"],
         "test": [
-            "fakeredis==1.0.4", "mock==3.0.5",
+            "fakeredis==1.0.4", "mock==3.0.5", "typing",
             # we need to install plumbum in order to make easypy functions -
             # 'initialize_exception_listener' and 'raise_in_main_thread' work properly in client's test
             "plumbum@git+https://github.com/weka-io/plumbum@master#egg=plumbum"
