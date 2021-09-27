@@ -418,6 +418,7 @@ class Job(object):
                 except IndexError:
                     break
             if chunks:
+                self.logger.debug('chunks:%s types:%s', chunks, [type(chunk) for chunk in chunks])
                 to_send = b"".join(chunks)
                 self.logger.debug("Sending data from %s, len=%s", channel.name, len(to_send))
                 cmd = 'result-%s-%s' % (self.job_id, channel.name)
