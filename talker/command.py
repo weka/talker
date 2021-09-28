@@ -642,8 +642,8 @@ class Cmd(object):
         return ret
 
     def _request_outputs(self, pipeline):
-        pipeline.lrange(self._stdout_key, 0, -1)
-        pipeline.lrange(self._stderr_key, 0, -1)
+        pipeline.lrange(self._stdout_key, 0, -1, _cmd_id=self.job_id)
+        pipeline.lrange(self._stderr_key, 0, -1, _cmd_id=self.job_id)
 
     def _fetch_outputs(self):
         with self.talker.reactor.pipeline() as p:
@@ -663,7 +663,7 @@ class Cmd(object):
                     ((len_stdout, self._stdout_key),
                      (len_stderr, self._stderr_key)):
                 if data_len:
-                    p.ltrim(redis_key, data_len, -1)
+                    p.ltrim(redis_key, data_len, -1, _cmd_id=self.job_id)
             if pipeline is None:
                 p.execute()
 

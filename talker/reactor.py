@@ -134,7 +134,7 @@ class TalkerReactor():
                 return self._FALSE
             return res
 
-        res = wait(timeout, _send, sleep=0.01, progressbar=False, throw=False)
+        res = wait(timeout, _send, sleep=0.1, progressbar=False, throw=False)
         if res == self._FALSE:
             res = False
         return res
