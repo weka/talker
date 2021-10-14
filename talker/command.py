@@ -583,6 +583,54 @@ class Cmd(object):
             self.raise_exception(exception_cls=UnknownExitCode, exit_code=exit_code)
         self.raise_if_needed()
 
+    def _is_done(self, for_ack=False, blpop_timeout=0.0):
+        """
+        Checks if the command is done
+
+        :param [bool] for_ack: Checks if the command is acked instead of finish
+
+        :returns: The command return code if done  else None
+                  (if for_ack=True and self.ack is not Nome will return agent job start time)
+        :rtype: int or None
+        """
+        if for_ack:
+            if self.ack is not None:
+                return self.ack
+
+        if self.retcode is not None:
+            return self.retcode
+
+        # we don't want to wait too long, cause we want to raise timeout exceptions promptly
+        blpop_timeout = (
+            blpop_timeout if blpop_timeout
+            else 1 if not self.is_sent
+            else self.ack_timer.expiration // 10 if not self.ack
+            else self.client_timer.expiration // 10)
+
+        result = self.talker.reactor.blpop(
+            [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id)
+        if result is None:
+            self.check_client_timeout()
+            return
+
+        key, value = result
+        key = key.decode()
+        if key == self._ack_key:
+            _verbose_logger.debug("%s: ack received (%s)", self, value)
+            self.on_ack(value)
+            return
+
+        return self.on_polled(result[1])
+
+    def is_done(self):
+        """
+        Checks if the command is done
+
+        :returns: True if the command is done, False otherwise
+        :rtype: bool
+        """
+        return self._is_done(blpop_timeout=0.1) is not None
+
     def wait(self, for_ack=False):
         """
         Wait until the command is done
@@ -590,37 +638,15 @@ class Cmd(object):
         :param [bool] for_ack: Wait for the command to be acked instead of command to finish
 
         :returns: The command return code when done
+                  (if for_ack=True and self.ack is not Nome will return agent job start time)
         :rtype: int
         """
         while True:
-
-            if for_ack:
-                if self.ack is not None:
-                    return self.ack
-
-            if self.retcode is not None:
-                return self.retcode
-
-            # we don't want to wait too long, cause we want to raise timeout exceptions promptly
-            blpop_timeout = (
-                1 if not self.is_sent
-                else self.ack_timer.expiration // 10 if not self.ack
-                else self.client_timer.expiration // 10)
-
-            result = self.talker.reactor.blpop(
-                [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id)
+            result = self._is_done(for_ack)
             if result is None:
-                self.check_client_timeout()
                 continue
 
-            key, value = result
-            key = key.decode()
-            if key == self._ack_key:
-                _verbose_logger.debug("%s: ack received (%s)", self, value)
-                self.on_ack(value)
-                continue
-
-            return self.on_polled(result[1])
+            return result
 
     def result(self, decode='utf8'):
         """
