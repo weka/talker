@@ -101,7 +101,10 @@ class Talker(object):
             line_timeout=None,
             log_file=None,
             raise_on_failure=True,
-            max_output_per_channel=None, set_new_logpath=None):
+            max_output_per_channel=None,
+            set_new_logpath=None,
+            alive_check=False,
+            alive_check_interval=10.0):
 
         """
         Run a command on a specific host
@@ -117,6 +120,8 @@ class Talker(object):
         :param [bool] raise_on_failure: Should the client raise an appropriate exception on failure
         :param [int] max_output_per_channel: Maximum command output in bytes
         :param [str] set_new_logpath: Reconfigure the remote agent's log path
+        :param [bool] alive_check: Stop waiting for command to finish if host isn't alive
+        :param [float] alive_check_interval: Intervals between host alive checks
 
         :returns: The command running on the remote host
         :rtype: Cmd
@@ -133,7 +138,8 @@ class Talker(object):
             talker=self, host_id=host_id, raise_on_failure=raise_on_failure,
             line_timeout=line_timeout, log_file=log_file,
             args=args, ack_timeout=ack_timeout, timeout=timeout, server_timeout=server_timeout, name=name,
-            max_output_per_channel=max_output_per_channel, set_new_logpath=set_new_logpath)
+            max_output_per_channel=max_output_per_channel, set_new_logpath=set_new_logpath, alive_check=alive_check,
+            alive_check_interval=alive_check_interval)
         cmd.send()
         return cmd
 
@@ -234,11 +240,11 @@ class Talker(object):
             cmd.wait()
         except CommandTimeoutError as exc:
             _logger.debug('%s:is_alive resulted with %s returning true', cmd.job_id, exc.__class__.__name__)
-            return True
         except (TalkerServerTimeout, ClientCommandTimeoutError) as exc:
             _logger.debug('%s:is_alive resulted with %s ignoring ...', cmd.job_id, exc.__class__.__name__)
-            pass
-        return bool(cmd.ack)
+            return False
+
+        return True
 
     def wait(self, cmds, sleep=0.5, timeout=DAY, initial_log_interval=12):
         """

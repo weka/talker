@@ -19,7 +19,8 @@ from talker.errors import (
     CommandTimeout, UnknownChannel, TalkerCommandLost, HostDidNotRecover, HostStillAlive,
     TalkerClientSendTimeout, TalkerServerTimeout, ClientCommandTimeoutError, CommandTimeoutError,
     CommandAbortedByReboot, CommandAbortedByOverflow, CommandOrphaned,
-    CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone
+    CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone,
+    HostIsNotResponsive
 )
 
 
@@ -66,6 +67,8 @@ class Cmd(object):
                  name=None,
                  max_output_per_channel=None,
                  set_new_logpath=None,
+                 alive_check=False,
+                 alive_check_interval=10,
                  ):
         self.name = name
         self.job_id = str(uuid4())
@@ -92,6 +95,8 @@ class Cmd(object):
         self.client_timer = Timer(expiration=self.timeout if not server_timeout else self.timeout + 5)
         self._line_timeout_synced = False
         self.attempts = 0  # in case of TalkerCommandLost
+        self.alive_check = alive_check
+        self.alive_check_interval = alive_check_interval
 
     def __repr__(self):
         return "%s(<%s>%s)" % (self.__class__.__name__, self.job_id, "!" if not self.ack else "")
@@ -592,6 +597,7 @@ class Cmd(object):
         :returns: The command return code when done
         :rtype: int
         """
+        last_check = time.monotonic()  # we want to wait the first interval
         while True:
 
             if for_ack:
@@ -607,10 +613,20 @@ class Cmd(object):
                 else self.ack_timer.expiration // 10 if not self.ack
                 else self.client_timer.expiration // 10)
 
+            if self.alive_check:
+                blpop_timeout = min(blpop_timeout, self.alive_check_interval)
+
             result = self.talker.reactor.blpop(
                 [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id)
             if result is None:
                 self.check_client_timeout()
+
+                if self.alive_check and last_check + self.alive_check_interval < time.monotonic():
+                    if self.talker.is_alive(self.host_id, 'wait_alive_check'):
+                        last_check = time.monotonic()
+                    else:
+                        self.raise_exception(HostIsNotResponsive)
+
                 continue
 
             key, value = result
