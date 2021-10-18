@@ -88,3 +88,7 @@ class NoResponseForRedisCommand(TException, PredicateNotSatisfied):
 
 class RedisConnectionError(TException):
     template = "Connection error while communicating with Talker Redis {talker}"
+
+
+class HostIsNotResponsive(TException):
+    template = "Host {host_id} is not responsive, either host or talker is down"
