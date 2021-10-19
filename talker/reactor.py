@@ -36,16 +36,12 @@ class TalkerReactor():
         self._main_loop.start()
 
     @staticmethod
-    def _log_sent_items(items):
-        for item in items:
-            if item.callback:
-                item.callback()
+    def _log_cmd(cmd, cmd_id=None):
+        log_message = 'reactor got command {}'.format(cmd)
+        if cmd_id:
+            log_message = '{}: {}'.format(log_message, cmd_id)
 
-            log_message = 'reactor sent command {}'.format(item.cmd)
-            if item.cmd_id:
-                log_message = '{}: {}'.format(log_message, item.cmd_id)
-
-            _verbose_logger.debug(log_message)
+        _verbose_logger.debug(log_message)
 
     def _get_main_loop(self):
         while True:
@@ -78,8 +74,11 @@ class TalkerReactor():
                     raise RedisTimeoutError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
 
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
-                self._log_sent_items(items)  # logs to debug WEKAPP-35305
+
                 for item, result in zip(items, results):
+                    if item.callback:
+                        item.callback()
+
                     if item.event:  # non-async
                         item.results.append(result)
                         item.event.set()
@@ -99,6 +98,9 @@ class TalkerReactor():
 
         if cmd not in self.ASYNC_COMMANDS:
             self._commands[cmd_idx] = item
+
+        if cmd not in self.BLOCKING_COMMANDS:
+            self._log_cmd(cmd, _cmd_id)
 
         self._commands_queue.put(item)
 
@@ -134,6 +136,7 @@ class TalkerReactor():
                 return self._FALSE
             return res
 
+        self._log_cmd(cmd, kwargs.get('_cmd_id'))
         res = wait(timeout, _send, sleep=0.01, progressbar=False, throw=False)
         if res == self._FALSE:
             res = False
