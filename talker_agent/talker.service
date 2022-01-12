@@ -1,0 +1,12 @@
+[Unit]
+Description=talker daemon
+
+[Service]
+User=root
+WorkingDirectory=/root/talker
+# we assume /usr/bin/python exists, if not you should change this or create symbolic link
+ExecStart=/usr/bin/python talker.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
