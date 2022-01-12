@@ -15,7 +15,11 @@ if [ "$DOWNLOAD_TALKER" = true ] ; then
 
   sudo mkdir -p /root/talker
   cd /root/talker
-  curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker-service > talker-service
+  if [ "$(ps --no-headers -o comm 1)" == "systemd" ]; then
+    curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.service > talker.service
+  else
+    curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker-service > talker-service
+  fi
   curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.py > talker.py
   chmod +x talker.py
 fi
