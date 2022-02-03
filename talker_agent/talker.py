@@ -996,10 +996,11 @@ def main(*args):
     no_restart = "--no-restart" in args
 
     version = open(VERSION_FILENAME).read()
-    logger.info("Starting Talker: %s", version)
 
     config = Config()
     set_logging_to_file(config.parser.get('logging', 'logpath'))
+
+    logger.info("Starting Talker: %s", version)
 
     # to help with WEKAPP-74054
     os.system("df")
