@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/weka-io/talker.svg?branch=master)](https://travis-ci.com/weka-io/talker) [![PyPI version](https://badge.fury.io/py/talker.svg)](https://badge.fury.io/py/talker)
+[![Build Status](https://app.travis-ci.com/weka/talker.svg?branch=master)](https://app.travis-ci.com/github/weka/talker) [![PyPI version](https://badge.fury.io/py/talker.svg)](https://badge.fury.io/py/talker)
 
 # Talker
 
