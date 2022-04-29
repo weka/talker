@@ -16,11 +16,14 @@ if [ "$DOWNLOAD_TALKER" = true ] ; then
   sudo mkdir -p /root/talker
   cd /root/talker
   if [ "$(ps --no-headers -o comm 1)" == "systemd" ]; then
-    curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.service > talker.service
+    echo "Downloading talker systemd unit configuration file..."
+    curl --tlsv1.2 -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.service > talker.service
   else
-    curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker-service > talker-service
+    echo "Downloading talker init.d script..."
+    curl --tlsv1.2 -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker-service > talker-service
   fi
-  curl -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.py > talker.py
+  echo "Downloading talker agent python file..."
+  curl --tlsv1.2 -fL https://github.com/weka-io/talker/raw/"$git_version"/talker_agent/talker.py > talker.py
   chmod +x talker.py
 fi
 
@@ -28,7 +31,8 @@ echo "$TALKER_AGENT_VERSION" > version
 
 # Add redis py dependency
 REDIS_COMMIT_ID=ad84781ea260be0a1ca4bf6768959b50e8835a6b
-curl -fL https://github.com/weka-io/redis-py/archive/"$REDIS_COMMIT_ID".tar.gz -o redis-py-"$REDIS_COMMIT_ID".tar.gz
+echo "Downloading redis package..."
+curl --tlsv1.2 -fL https://github.com/weka-io/redis-py/archive/"$REDIS_COMMIT_ID".tar.gz -o redis-py-"$REDIS_COMMIT_ID".tar.gz
 tar -xzf redis-py-"$REDIS_COMMIT_ID".tar.gz
 mv redis-py-"$REDIS_COMMIT_ID"/redis .
 rm -rf redis-py-"$REDIS_COMMIT_ID" redis-py-"$REDIS_COMMIT_ID".tar.gz
