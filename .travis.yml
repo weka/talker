@@ -43,6 +43,7 @@ script: pytest $TEST_SUITE -v
 dist: xenial
 install:
 - pip install --upgrade pip
+- pip install -U importlib_metadata
 - pip install .[test]
 deploy:
   provider: pypi
