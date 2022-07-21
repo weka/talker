@@ -439,13 +439,11 @@ class Cmd(object):
             if self.handling_timer.expired:
                 self.raise_exception(exception_cls=TalkerClientSendTimeout, timeout=self.handling_timer.elapsed)
         elif not self.ack:
-            is_talker_alive_name = 'is_talker_alive'
-
             # client did not receive command - check all timers
             if self.ack_timer.expired or self.client_timer.expired:
                 talker_alive = False
-                if self.name != is_talker_alive_name:  # prevent recursion
-                    if self.talker.is_alive(self.host_id, is_talker_alive_name):
+                if self.name != 'is_alive':  # prevent recursion
+                    if self.talker.is_alive(self.host_id):
                         # check again, since talker may have just booted
                         self.poll(check_client_timeout=False)
                         if self.ack:
@@ -622,7 +620,7 @@ class Cmd(object):
                 self.check_client_timeout()
 
                 if self.alive_check and last_check + self.alive_check_interval < time.monotonic():
-                    if self.talker.is_alive(self.host_id, 'wait_alive_check'):
+                    if self.talker.is_alive(self.host_id):
                         last_check = time.monotonic()
                     else:
                         self.raise_exception(HostIsNotResponsive)
