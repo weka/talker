@@ -115,7 +115,7 @@ class TalkerReactor():
         def has_response():
             _check_exiting()
             if not item.event.wait(timeout=0.5):
-                raise NoResponseForRedisCommand(**item._asdict())
+                raise NoResponseForRedisCommand(talker=self.talker, **item._asdict())
             return True
 
         wait(REDIS_SOCKET_TIMEOUT + MINUTE, has_response, message=False, progressbar=False, sleep=0)
