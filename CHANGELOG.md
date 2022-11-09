@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- parse command OSError.strerror to bytes
+- fix travis build links
+- start talker agent logging after configure logging
+- fix travis python3.7 package installation issue
+- fix is_alive function
+
+### Added
+- allow stop waiting on command when the host isn't responsive
+- add agent talker daemon systemd support
+
+### Changed
+- log only once when reactor gets a command
+- add talker details to NoResponseForRedisCommand exception
 
 ## [1.9.3] - 2021-09-23
 ### Fixed
