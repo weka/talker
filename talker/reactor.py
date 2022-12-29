@@ -8,7 +8,7 @@ from threading import RLock, Event, Semaphore
 import redis.exceptions
 
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
-from easypy.timing import wait, Timer
+from easypy.timing import wait, Timer, TimeoutException
 from easypy.units import MINUTE
 
 from talker.errors import NoResponseForRedisCommand, RedisConnectionError, RedisTimeoutError
@@ -101,11 +101,13 @@ class TalkerReactor():
     def get_response(self, item):
         def has_response():
             _check_exiting()
-            if not item.event.wait(timeout=0.5):
-                raise NoResponseForRedisCommand(talker=self.talker, **item._asdict())
-            return True
+            return item.event.wait(timeout=0.5)
 
-        wait(REDIS_SOCKET_TIMEOUT + MINUTE, has_response, message=False, progressbar=False, sleep=0)
+        try:
+            wait(REDIS_SOCKET_TIMEOUT + MINUTE, has_response, message=False, progressbar=False, sleep=0)
+        except TimeoutException:
+            raise NoResponseForRedisCommand(talker=self.talker, **item._asdict())
+
         [response] = item.results
         return response
 
