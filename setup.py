@@ -17,7 +17,7 @@ setuptools.setup(
     url="https://github.com/weka-io/talker",
     license='BSD',
     install_requires=[
-        'redis==3.3.7',
+        'redis==4.4.4',
         'weka-easypy==0.3.1'
     ],
     extras_require={
