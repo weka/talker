@@ -20,7 +20,7 @@ from talker.errors import (
     TalkerClientSendTimeout, TalkerServerTimeout, ClientCommandTimeoutError, CommandTimeoutError,
     CommandAbortedByReboot, CommandAbortedByOverflow, CommandOrphaned,
     CommandLineTimeout, CommandExecutionError, UnknownExitCode, TalkerError, CommandPidTimeoutError, CommandAlreadyDone,
-    HostIsNotResponsive
+    HostIsNotResponsive,NoResponseForRedisCommand
 )
 
 
@@ -613,9 +613,12 @@ class Cmd(object):
 
             if self.alive_check:
                 blpop_timeout = min(blpop_timeout, self.alive_check_interval)
-
-            result = self.talker.reactor.blpop(
-                [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id)
+            try:
+                result = self.talker.reactor.blpop(
+                    [self._exit_code_key, self._ack_key], timeout=blpop_timeout, _cmd_id=self.job_id, _callback=self.on_sent)
+            except NoResponseForRedisCommand as e:
+                if self.is_sent:
+                    raise e
             if result is None:
                 self.check_client_timeout()
 
