@@ -1,10 +1,10 @@
 from collections import namedtuple
-from concurrent.futures import ProcessPoolExecutor #ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from functools import partial
-from queue import Queue, Empty
-#from threading import RLock, Event, Semaphore
-from multiprocessing import Event,  Semaphore, RLock
+from queue import Empty
+from multiprocessing import Event, Queue, Manager
+
 import redis.exceptions
 
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
@@ -26,9 +26,11 @@ class TalkerReactor():
         self._max_workers = 5
         self._executors = ProcessPoolExecutor(max_workers=self._max_workers)
         self._commands_queue = Queue()
-        self._commands = dict()
-        self._lock = RLock()
-        self._current_workers = Semaphore(self._max_workers)
+        
+        self._lock = Manager().RLock()
+        
+        self._current_workers = Manager().Semaphore(self._max_workers)
+        
         self._cmd_idx = 0
 
         reactor_loop = _logger.context(host="TLKR-reactor-loop")(self._get_main_loop)
