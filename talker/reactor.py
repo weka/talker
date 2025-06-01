@@ -13,6 +13,13 @@ from easypy.units import MINUTE
 
 from talker.errors import NoResponseForRedisCommand, RedisConnectionError, RedisTimeoutError
 from talker.config import _logger, _verbose_logger, REDIS_SOCKET_TIMEOUT
+from talker.utils import retry_on_exception
+
+
+# Retry parameters for Redis operations
+REDIS_RETRY_ATTEMPTS = 3
+REDIS_RETRY_DELAY_SECONDS = 1
+REDIS_RETRY_BACKOFF_FACTOR = 2
 
 
 class TalkerReactor():
@@ -66,12 +73,22 @@ class TalkerReactor():
                     redis_func = getattr(pipeline, item.cmd)
                     redis_func(*item.args, **item.kwargs)
 
-                try:
-                    results = pipeline.execute()
-                except redis.exceptions.ConnectionError as exc:
-                    raise RedisConnectionError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
-                except redis.exceptions.TimeoutError as exc:
-                    raise RedisTimeoutError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
+                def _execute_pipeline_with_error_handling():
+                    try:
+                        return pipeline.execute()
+                    except redis.exceptions.ConnectionError as exc:
+                        raise RedisConnectionError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
+                    except redis.exceptions.TimeoutError as exc:
+                        raise RedisTimeoutError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
+
+                results = retry_on_exception(
+                    _execute_pipeline_with_error_handling,
+                    exceptions_to_catch=(RedisConnectionError, RedisTimeoutError),
+                    max_attempts=REDIS_RETRY_ATTEMPTS,
+                    delay_seconds=REDIS_RETRY_DELAY_SECONDS,
+                    backoff_factor=REDIS_RETRY_BACKOFF_FACTOR,
+                    logger=_logger
+                )
 
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
 
