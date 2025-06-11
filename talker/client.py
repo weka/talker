@@ -14,11 +14,14 @@ from easypy.humanize import compact
 
 from talker.reactor import TalkerReactor
 from talker.command import Cmd, RebootCmd
-from talker.errors import RedisTimeoutError, TalkerServerTimeout, CommandTimeoutError, ClientCommandTimeoutError
+from talker.errors import (
+    TalkerServerTimeout, CommandTimeoutError, ClientCommandTimeoutError
+)
 from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
     REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger, IS_ALIVE_ACK_TIMEOUT, IS_ALIVE_TIMEOUT
 )
+from talker.utils import retry_redis_op
 
 
 @locking_cache
@@ -174,41 +177,52 @@ class Talker(object):
     def poll(self, cmds):
         results = {cmd: dict(ack=cmd.ack, retcode=cmd.retcode) for cmd in cmds}
 
+        @retry_redis_op
+        def _execute_poll_pipeline(pipeline_obj, log_context_extra=None):
+            self._pipeline_flush_log(pipeline_obj)
+            return pipeline_obj.execute()
+
         with self.redis.pipeline() as p:
             res_idx_to_i = {}
             res_idx = 0
-            for cmd in cmds:
-                if cmd.ack is None:
-                    p.lpop(cmd._ack_key)
-                    res_idx_to_i[res_idx] = cmd, 'ack'
+            for cmd_obj in cmds: # Renamed to cmd_obj to avoid conflict in loop below
+                if cmd_obj.ack is None:
+                    p.lpop(cmd_obj._ack_key)
+                    res_idx_to_i[res_idx] = cmd_obj, 'ack'
                     res_idx += 1
 
-                if cmd.retcode is None:
-                    p.lpop(cmd._exit_code_key)
-                    res_idx_to_i[res_idx] = cmd, 'retcode'
+                if cmd_obj.retcode is None:
+                    p.lpop(cmd_obj._exit_code_key)
+                    res_idx_to_i[res_idx] = cmd_obj, 'retcode'
                     res_idx += 1
 
             if res_idx:
-                self._pipeline_flush_log(p)
-
-                with RedisTimeoutError.on_exception(redis.exceptions.TimeoutError, redis=self):
-                    pipeline_results = p.execute()
+                host_ids_summary = sorted(list(set(c.host_id for c in cmds if hasattr(c, 'host_id'))))
+                log_extra_for_retry = {
+                    'client_operation': 'poll',
+                    'num_cmds': len(cmds),
+                    'host_ids_summary': str(host_ids_summary)[:100]
+                }
+                pipeline_results = _execute_poll_pipeline(
+                    p,
+                    log_context_extra=log_extra_for_retry
+                )
 
                 for (i, result) in enumerate(pipeline_results):
-                    cmd, slot = res_idx_to_i[i]
-                    results[cmd][slot] = result
+                    cmd_obj_loop, slot = res_idx_to_i[i] # Renamed to cmd_obj_loop
+                    results[cmd_obj_loop][slot] = result
 
-        def on_poll(cmd):
-            ack = results[cmd]['ack']
-            retcode = results[cmd]['retcode']
+        def on_poll(cmd_obj): # Renamed to cmd_obj
+            ack = results[cmd_obj]['ack']
+            retcode = results[cmd_obj]['retcode']
 
-            if cmd.ack is None and ack:
-                cmd.on_ack(ack)
+            if cmd_obj.ack is None and ack:
+                cmd_obj.on_ack(ack)
 
             if retcode is None:
-                cmd.check_client_timeout()
+                cmd_obj.check_client_timeout()
 
-            return cmd.on_polled(retcode)
+            return cmd_obj.on_polled(retcode)
 
         # Using MultiObject allows to raise multiexception, not just exception on single cmd
         return MultiObject(cmds).call(on_poll)
@@ -368,22 +382,49 @@ class Talker(object):
         :rtype: MultiObject[Tuple[str, str]]
         """
         ret = []
+
+        @retry_redis_op
+        def _execute_get_output_pipeline_part(pipeline_obj, part_name, log_context_extra=None):
+            self._pipeline_flush_log(pipeline_obj)
+            return pipeline_obj.execute()
+
         with self.redis.pipeline() as p:
             for cmd in cmds:
                 cmd._request_outputs(p)
-            self._pipeline_flush_log(p)
-            results = p.execute()
+            
+            host_ids_summary = sorted(list(set(c.host_id for c in cmds if hasattr(c, 'host_id'))))
+            log_extra_part1 = {
+                'client_operation': 'get_output_part1_request',
+                'num_cmds': len(cmds),
+                'host_ids_summary': str(host_ids_summary)[:100]
+            }
+            pipeline_results_part1 = _execute_get_output_pipeline_part(
+                p, "request_outputs",
+                log_context_extra=log_extra_part1
+            )
             p.reset()
-            for i, (stdout, stderr) in enumerate(chunkify(results, 2)):
+
+            for i, (stdout_key, stderr_key) in enumerate(chunkify(pipeline_results_part1, 2)):
                 cmd = cmds.L[i]
-                cmd.on_output(cmd.stdout, stdout)
-                cmd.on_output(cmd.stderr, stderr)
-                cmd._trim_outputs(stdout, stderr, pipeline=p)
+                cmd.on_output(cmd.stdout, stdout_key)
+                cmd.on_output(cmd.stderr, stderr_key)
+                cmd._trim_outputs(stdout_key, stderr_key, pipeline=p)
+                
+                stdout_content, stderr_content = stdout_key, stderr_key
                 if decode:
-                    (stdout, stderr) = (cmd._decode_output(out, decode) for out in (stdout, stderr))
-                ret.append((stdout, stderr))
-            self._pipeline_flush_log(p)
-            p.execute()
+                    (stdout_content, stderr_content) = (cmd._decode_output(out, decode) for out in (stdout_key, stderr_key))
+                ret.append((stdout_content, stderr_content))
+            
+            if p.command_stack:
+                log_extra_part2 = {
+                    'client_operation': 'get_output_part2_trim',
+                    'num_cmds': len(cmds),
+                    'host_ids_summary': str(host_ids_summary)[:100]
+                }
+                _execute_get_output_pipeline_part(
+                    p, "trim_outputs",
+                    log_context_extra=log_extra_part2
+                )
         return MultiObject(ret)
 
     def iter_output(self, cmds, sleep=1.0, decode='utf-8'):

@@ -39,6 +39,7 @@ from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
 from threading import Lock
+from talker.utils import retry_redis_op
 try:
     from configparser import ConfigParser, NoSectionError
 except:  # python 2.7
@@ -597,6 +598,18 @@ class TalkerAgent(object):
         self.stop_fetching.set()
         self.stop_agent.set()
 
+    @retry_redis_op
+    def _blpop_with_retry(self, jobs_key):
+        return self.redis.blpop([jobs_key], timeout=1)
+
+    @retry_redis_op
+    def _lrange_with_retry(self, jobs_key):
+        return self.redis.lrange(jobs_key, 0, -1)
+
+    @retry_redis_op
+    def _ltrim_with_retry(self, jobs_key, trim_len):
+        return self.redis.ltrim(jobs_key, trim_len, -1)
+
     def fetch_new_jobs(self):
         """
         format of job
@@ -609,7 +622,7 @@ class TalkerAgent(object):
         jobs_key = 'commands-%s' % self.host_id
         while not self.stop_fetching.is_set():
             new_jobs = []
-            ret = self.redis.blpop([jobs_key], timeout=1)
+            ret = self._blpop_with_retry(jobs_key)
             if not ret:
                 now = time.time()
                 self.scrub_seen_jobs(now=now)
@@ -621,9 +634,9 @@ class TalkerAgent(object):
             new_jobs.append(job_data_raw)
 
             # Could be that multiple jobs were sent, checking with lrange
-            additional_jobs = self.redis.lrange(jobs_key, 0, -1)
+            additional_jobs = self._lrange_with_retry(jobs_key)
             if len(additional_jobs):
-                self.redis.ltrim(jobs_key, len(additional_jobs), -1)
+                self._ltrim_with_retry(jobs_key, len(additional_jobs))
 
             new_jobs.extend(additional_jobs)
             logger.debug("Got %s jobs", len(new_jobs))
@@ -714,6 +727,9 @@ class TalkerAgent(object):
             with open(EXCEPTION_FILENAME, 'rb') as f:
                 self.pending_exception = f.read()
             os.remove(EXCEPTION_FILENAME)
+            if self.pending_exception and 'redis.exceptions' in self.pending_exception.decode('utf-8', errors='ignore'):
+                logger.info("Ignoring pending exception due to Redis error.")
+                self.pending_exception = None
 
         with self.pipeline() as pipeline:
             for fn in glob.glob("%s/job.*.*" % JOBS_DIR):

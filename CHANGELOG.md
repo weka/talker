@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add retry mechanism for Redis operations in client and agent to improve resilience against transient Redis issues.
+
+### Fixed
+- Agent: Ignore pending exception from a previous run if it's a Redis error, preventing unnecessary error states.
+
 ## [1.9.4] - 2022-11-09
 ### Fixed
 - parse command OSError.strerror to bytes

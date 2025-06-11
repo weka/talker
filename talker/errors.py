@@ -92,3 +92,13 @@ class RedisConnectionError(TException):
 
 class HostIsNotResponsive(TException):
     template = "Host {host_id} is not responsive, either host or talker is down"
+
+
+class TalkerRedisOpFailedError(TException):
+    template = ("Redis operation '{func_name}' failed after {attempts} attempts. "
+                "Args: {args_summary}, Kwargs: {kwargs_summary}. Last error: {original_exception}")
+    original_exception = None
+    attempts = 0
+    func_name = ""
+    args_summary = ""
+    kwargs_summary = ""

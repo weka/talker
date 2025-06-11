@@ -11,8 +11,9 @@ from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_l
 from easypy.timing import wait, Timer
 from easypy.units import MINUTE
 
-from talker.errors import NoResponseForRedisCommand, RedisConnectionError, RedisTimeoutError
+from talker.errors import NoResponseForRedisCommand
 from talker.config import _logger, _verbose_logger, REDIS_SOCKET_TIMEOUT
+from talker.utils import retry_redis_op
 
 
 class TalkerReactor():
@@ -61,17 +62,27 @@ class TalkerReactor():
     @raise_in_main_thread()
     def _send_data(self, items):
         try:
+            @retry_redis_op
+            def execute_pipeline_with_retry(pipeline_obj, log_context_extra=None):
+                return pipeline_obj.execute()
+
             with self.talker.redis.pipeline() as pipeline:
                 for item in items:
                     redis_func = getattr(pipeline, item.cmd)
                     redis_func(*item.args, **item.kwargs)
 
-                try:
-                    results = pipeline.execute()
-                except redis.exceptions.ConnectionError as exc:
-                    raise RedisConnectionError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
-                except redis.exceptions.TimeoutError as exc:
-                    raise RedisTimeoutError(talker=self.talker, commands=pipeline.command_stack, exc=exc)
+                # Prepare context for logging within the retry decorator
+                cmds_summary = ", ".join(item.cmd for item in items)
+                log_extra_for_retry = {
+                    'reactor_operation': 'execute_pipeline',
+                    'commands_summary': cmds_summary[:100],
+                    'num_items': len(items)
+                }
+                
+                results = execute_pipeline_with_retry(
+                    pipeline,
+                    log_context_extra=log_extra_for_retry
+                )
 
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
 
