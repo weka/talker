@@ -39,7 +39,6 @@ from contextlib import contextmanager
 from logging import getLogger
 from logging.handlers import RotatingFileHandler
 from threading import Lock
-from talker.utils import retry_redis_op
 try:
     from configparser import ConfigParser, NoSectionError
 except:  # python 2.7
@@ -598,15 +597,12 @@ class TalkerAgent(object):
         self.stop_fetching.set()
         self.stop_agent.set()
 
-    @retry_redis_op
     def _blpop_with_retry(self, jobs_key):
         return self.redis.blpop([jobs_key], timeout=1)
 
-    @retry_redis_op
     def _lrange_with_retry(self, jobs_key):
         return self.redis.lrange(jobs_key, 0, -1)
 
-    @retry_redis_op
     def _ltrim_with_retry(self, jobs_key, trim_len):
         return self.redis.ltrim(jobs_key, trim_len, -1)
 
