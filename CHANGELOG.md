@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Remove unecessary use of retry in the agent
+
 ## [1.9.5] - 2025-06-12
 
 ### Added
