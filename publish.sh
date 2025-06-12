@@ -1,3 +1,4 @@
+#!/bin/bash
 # You should run this script when you want to publish a new talker version.
 # Notice: you must first merge your changes to master branch, then run the script with the new version as a parameter.
 # for example: ./publish.sh 1.8.2
