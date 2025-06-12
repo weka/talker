@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.5] - 2025-06-12
+
 ### Added
 - Add retry mechanism for Redis operations in client and agent to improve resilience against transient Redis issues.
 
