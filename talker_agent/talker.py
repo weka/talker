@@ -824,16 +824,24 @@ class TalkerAgent(object):
             logger.debug("Done sending")
 
     def sync_jobs_progress(self):
+        max_retries = 10
         pipeline = self.redis.pipeline()
         now = time.time()
         while True:
             for job in list(self.current_processes.values()):
                 job.sync_progress(pipeline, now=now)
             if len(pipeline):
-                logger.debug("Sending %s commands via pipeline", len(pipeline))
-                pipeline.execute()
-                logger.debug("Done sending")
-                pipeline.reset()
+                for i in range(1,max_retries+1):
+                    try:
+                        logger.debug("Sending %s commands via pipeline", len(pipeline))
+                        pipeline.execute()
+                        logger.debug("Done sending")
+                        pipeline.reset()
+                    except Exception as e:
+                        logger.debug("Got error when executing pipeline (attempt {}/{}) error: {}".format(i, max_retries, e))
+                        time.sleep(i)
+                        if i == max_retries:
+                            raise
             else:
                 time.sleep(CYCLE_DURATION)
 
