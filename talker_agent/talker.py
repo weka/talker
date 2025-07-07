@@ -824,7 +824,7 @@ class TalkerAgent(object):
             logger.debug("Done sending")
 
     def sync_jobs_progress(self):
-        max_retries = 10
+        max_retries = 15
         pipeline = self.redis.pipeline()
         now = time.time()
         while True:
