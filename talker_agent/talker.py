@@ -297,10 +297,12 @@ class Job(object):
         self.acknowledge()
 
     def acknowledge(self):
+        self.logger.debug("sending ack for cmd %s",self.job_id)
         pipeline = self.agent.redis.pipeline()
         pipeline.rpush("result-%s-ack" % self.job_id, self.start_time)
         pipeline.expire("result-%s-ack" % self.job_id, FINAL_RESULT_EXPIRATION)
         pipeline.execute()
+        self.logger.debug("done sending ack for cmd %s",self.job_id)
 
     def start(self):
         already_seen = self.agent.check_if_seen(self.job_id)
@@ -359,8 +361,10 @@ class Job(object):
         self.last_read = time.time()
         self.logger.debug("job started: pid=%s", self.popen.pid)
         pipeline = self.agent.redis.pipeline()
+        self.logger.debug("setting result-%s-pid key...",self.popen.pid)
         pipeline.set("result-%s-pid" % self.job_id, self.popen.pid)
         pipeline.execute()
+        self.logger.debug("done setting result-%s-pid key...",self.popen.pid)
 
     def finalize(self, pipeline=None):
         own_pipeline = pipeline is None
@@ -370,7 +374,9 @@ class Job(object):
         self.send_data(throttled=False, pipeline=pipeline)
         self.send_result(pipeline)
         if own_pipeline:
+            self.logger.debug("finalizing job....")
             pipeline.execute()
+            self.logger.debug("done finalizing job.")
 
     def reset_timeout(self, new_timeout=None):
         if new_timeout:
@@ -597,15 +603,6 @@ class TalkerAgent(object):
         self.stop_fetching.set()
         self.stop_agent.set()
 
-    def _blpop_with_retry(self, jobs_key):
-        return self.redis.blpop([jobs_key], timeout=1)
-
-    def _lrange_with_retry(self, jobs_key):
-        return self.redis.lrange(jobs_key, 0, -1)
-
-    def _ltrim_with_retry(self, jobs_key, trim_len):
-        return self.redis.ltrim(jobs_key, trim_len, -1)
-
     def fetch_new_jobs(self):
         """
         format of job
@@ -618,7 +615,7 @@ class TalkerAgent(object):
         jobs_key = 'commands-%s' % self.host_id
         while not self.stop_fetching.is_set():
             new_jobs = []
-            ret = self._blpop_with_retry(jobs_key)
+            ret = self.redis.blpop([jobs_key],timeout=1)
             if not ret:
                 now = time.time()
                 self.scrub_seen_jobs(now=now)
@@ -630,9 +627,9 @@ class TalkerAgent(object):
             new_jobs.append(job_data_raw)
 
             # Could be that multiple jobs were sent, checking with lrange
-            additional_jobs = self._lrange_with_retry(jobs_key)
+            additional_jobs = self.redis.lrange(jobs_key,0,-1)
             if len(additional_jobs):
-                self._ltrim_with_retry(jobs_key, len(additional_jobs))
+                self.redis.ltrim(jobs_key,len(additional_jobs),-1)
 
             new_jobs.extend(additional_jobs)
             logger.debug("Got %s jobs", len(new_jobs))
@@ -837,6 +834,7 @@ class TalkerAgent(object):
                         pipeline.execute()
                         logger.debug("Done sending")
                         pipeline.reset()
+                        break
                     except Exception as e:
                         logger.debug("Got error when executing pipeline (attempt {}/{}) error: {}".format(i, max_retries, e))
                         time.sleep(i)
@@ -888,7 +886,8 @@ class TalkerAgent(object):
         self.redis = redis.StrictRedis(
             host=host, port=port, db=0, password=password,
             socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
-            retry_on_timeout=retry_on_timeout, health_check_interval=health_check_interval
+            retry_on_timeout=retry_on_timeout, health_check_interval=health_check_interval,
+            max_connections=10
         )
 
         while True:
