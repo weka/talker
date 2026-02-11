@@ -31,7 +31,8 @@ def get_redis(host, password, port):
         socket_timeout=REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
         retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
-        health_check_interval=REDIS_HEALTH_CHECK_INTERVAL
+        health_check_interval=REDIS_HEALTH_CHECK_INTERVAL,
+        max_connections=50
     )
 
 
