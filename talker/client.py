@@ -4,6 +4,8 @@ from functools import partial
 
 from redis import StrictRedis
 import redis.exceptions
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry
 
 from easypy.caching import cached_property, locking_cache
 from easypy.collections import chunkify
@@ -21,16 +23,26 @@ from talker.config import (
     REDIS_SOCKET_TIMEOUT, REDIS_SOCKET_CONNECT_TIMEOUT, REDIS_RETRY_ON_TIMEOUT,
     REDIS_HEALTH_CHECK_INTERVAL, AGENT_ACK_TIMEOUT, _logger, _verbose_logger, IS_ALIVE_ACK_TIMEOUT, IS_ALIVE_TIMEOUT
 )
-from talker.utils import retry_redis_op
+
+REDIS_RETRY_BASE_SECONDS = 1
+REDIS_RETRY_CAP_SECONDS = 10
+REDIS_RETRY_MAX_ATTEMPTS = 7  # backoff sleeps total 54s: 2+4+8+10+10+10+10
 
 
 @locking_cache
 def get_redis(host, password, port):
+    # Keep cumulative backoff sleep under one minute.
+    retry_policy = Retry(
+        backoff=ExponentialBackoff(base=REDIS_RETRY_BASE_SECONDS, cap=REDIS_RETRY_CAP_SECONDS),
+        retries=REDIS_RETRY_MAX_ATTEMPTS,
+    )
     return StrictRedis(
         host=host, password=password, port=port,
         socket_timeout=REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+        retry=retry_policy,
         retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
+        retry_on_error=[redis.exceptions.ConnectionError],
         health_check_interval=REDIS_HEALTH_CHECK_INTERVAL,
         max_connections=50
     )
@@ -178,11 +190,6 @@ class Talker(object):
     def poll(self, cmds):
         results = {cmd: dict(ack=cmd.ack, retcode=cmd.retcode) for cmd in cmds}
 
-        @retry_redis_op
-        def _execute_poll_pipeline(pipeline_obj, log_context_extra=None):
-            self._pipeline_flush_log(pipeline_obj)
-            return pipeline_obj.execute()
-
         with self.redis.pipeline() as p:
             res_idx_to_i = {}
             res_idx = 0
@@ -198,16 +205,8 @@ class Talker(object):
                     res_idx += 1
 
             if res_idx:
-                host_ids_summary = sorted(list(set(c.host_id for c in cmds if hasattr(c, 'host_id'))))
-                log_extra_for_retry = {
-                    'client_operation': 'poll',
-                    'num_cmds': len(cmds),
-                    'host_ids_summary': str(host_ids_summary)[:100]
-                }
-                pipeline_results = _execute_poll_pipeline(
-                    p,
-                    log_context_extra=log_extra_for_retry
-                )
+                self._pipeline_flush_log(p)
+                pipeline_results = p.execute()
 
                 for (i, result) in enumerate(pipeline_results):
                     cmd_obj_loop, slot = res_idx_to_i[i] # Renamed to cmd_obj_loop
@@ -384,25 +383,12 @@ class Talker(object):
         """
         ret = []
 
-        @retry_redis_op
-        def _execute_get_output_pipeline_part(pipeline_obj, part_name, log_context_extra=None):
-            self._pipeline_flush_log(pipeline_obj)
-            return pipeline_obj.execute()
-
         with self.redis.pipeline() as p:
             for cmd in cmds:
                 cmd._request_outputs(p)
             
-            host_ids_summary = sorted(list(set(c.host_id for c in cmds if hasattr(c, 'host_id'))))
-            log_extra_part1 = {
-                'client_operation': 'get_output_part1_request',
-                'num_cmds': len(cmds),
-                'host_ids_summary': str(host_ids_summary)[:100]
-            }
-            pipeline_results_part1 = _execute_get_output_pipeline_part(
-                p, "request_outputs",
-                log_context_extra=log_extra_part1
-            )
+            self._pipeline_flush_log(p)
+            pipeline_results_part1 = p.execute()
             p.reset()
 
             for i, (stdout_key, stderr_key) in enumerate(chunkify(pipeline_results_part1, 2)):
@@ -417,15 +403,8 @@ class Talker(object):
                 ret.append((stdout_content, stderr_content))
             
             if p.command_stack:
-                log_extra_part2 = {
-                    'client_operation': 'get_output_part2_trim',
-                    'num_cmds': len(cmds),
-                    'host_ids_summary': str(host_ids_summary)[:100]
-                }
-                _execute_get_output_pipeline_part(
-                    p, "trim_outputs",
-                    log_context_extra=log_extra_part2
-                )
+                self._pipeline_flush_log(p)
+                p.execute()
         return MultiObject(ret)
 
     def iter_output(self, cmds, sleep=1.0, decode='utf-8'):
