@@ -30,11 +30,11 @@ REDIS_RETRY_MAX_ATTEMPTS = 7  # backoff sleeps total 54s: 2+4+8+10+10+10+10
 MAX_REDIS_CONNECTIONS = 100
 
 @locking_cache
-def get_redis(host, password, port):
+def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_seconds, redis_retry_max_attempts, max_connections, health_check_interval):
     # Keep cumulative backoff sleep under one minute.
     retry_policy = Retry(
-        backoff=ExponentialBackoff(base=REDIS_RETRY_BASE_SECONDS, cap=REDIS_RETRY_CAP_SECONDS),
-        retries=REDIS_RETRY_MAX_ATTEMPTS,
+        backoff=ExponentialBackoff(base=redis_retry_base_seconds, cap=redis_retry_cap_seconds),
+        retries=redis_retry_max_attempts,
     )
     return StrictRedis(
         host=host, password=password, port=port,
@@ -43,14 +43,21 @@ def get_redis(host, password, port):
         retry=retry_policy,
         retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
         retry_on_error=[redis.exceptions.ConnectionError],
-        health_check_interval=REDIS_HEALTH_CHECK_INTERVAL,
-        max_connections=MAX_REDIS_CONNECTIONS
+        health_check_interval=health_check_interval,
+        max_connections=max_connections
     )
 
 
 @locking_cache
-def get_talker(host, password, port, agent_version=None, name=None):
-    return Talker(host, password, port, agent_version=agent_version, name=name)
+def get_talker(host, password, port, agent_version=None, name=None,  redis_retry_base_seconds=REDIS_RETRY_BASE_SECONDS, redis_retry_cap_seconds=REDIS_RETRY_CAP_SECONDS, redis_retry_max_attempts=REDIS_RETRY_MAX_ATTEMPTS, max_connections=MAX_REDIS_CONNECTIONS, health_check_interval=REDIS_HEALTH_CHECK_INTERVAL):
+    redis_client_params = dict(
+        redis_retry_base_seconds=redis_retry_base_seconds,
+        redis_retry_cap_seconds=redis_retry_cap_seconds,
+        redis_retry_max_attempts=redis_retry_max_attempts, 
+        max_connections=max_connections,
+        health_check_interval=health_check_interval
+    )
+    return Talker(host, password, port, agent_version=agent_version, name=name, redis_client_params=redis_client_params)
 
 
 class Talker(object):
@@ -65,7 +72,7 @@ class Talker(object):
     :param [str] name: Name to use for the Talker client (for logging purposes)
     """
 
-    def __init__(self, host, password, port, agent_version, name):
+    def __init__(self, host, password, port, agent_version, name, redis_client_params):
         self._host = host
         self._password = password
         self._port = port
@@ -73,7 +80,7 @@ class Talker(object):
         self._journal_saved = False
         self.reactor = TalkerReactor(self)
         _logger.debug("%s: initialized", self)
-
+        self._redis_client_params = redis_client_params or {}
     @property
     def redis_params(self):
         """
@@ -96,7 +103,7 @@ class Talker(object):
         :returns: The Redis backend of this Talker client
         :rtype: StrictRedis
         """
-        return get_redis(**self.redis_params)
+        return get_redis(**self.redis_params, **self._redis_client_params)
 
     def __repr__(self):
         return "<{0.__class__.__name__} {0._name}/{0._host}:{0._port}>".format(self)
