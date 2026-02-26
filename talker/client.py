@@ -27,7 +27,7 @@ from talker.config import (
 REDIS_RETRY_BASE_SECONDS = 1
 REDIS_RETRY_CAP_SECONDS = 10
 REDIS_RETRY_MAX_ATTEMPTS = 7  # backoff sleeps total 54s: 2+4+8+10+10+10+10
-
+MAX_REDIS_CONNECTIONS = 100
 
 @locking_cache
 def get_redis(host, password, port):
@@ -44,7 +44,7 @@ def get_redis(host, password, port):
         retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
         retry_on_error=[redis.exceptions.ConnectionError],
         health_check_interval=REDIS_HEALTH_CHECK_INTERVAL,
-        max_connections=50
+        max_connections=MAX_REDIS_CONNECTIONS
     )
 
 
