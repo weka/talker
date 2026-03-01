@@ -5,15 +5,12 @@ from functools import partial
 from queue import Queue, Empty
 from threading import RLock, Event, Semaphore
 
-import redis.exceptions
-
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
 from easypy.timing import wait, Timer
 from easypy.units import MINUTE
 
 from talker.errors import NoResponseForRedisCommand
 from talker.config import _logger, _verbose_logger, REDIS_SOCKET_TIMEOUT
-from talker.utils import retry_redis_op
 
 
 class TalkerReactor():
@@ -72,37 +69,12 @@ class TalkerReactor():
 
                 assert len(results) == len(items), "Our redis pipeline got out of sync?"
 
-            @retry_redis_op
-            def execute_single_with_retry(redis_client, cmd_name, args, kwargs, log_context_extra=None):
-                redis_func = getattr(redis_client, cmd_name)
-                return redis_func(*args, **kwargs)
-
-            cmds_summary = ", ".join(item.cmd for item in items)
-            log_extra_base = {
-                'reactor_operation': 'retry_single_command',
-                'commands_summary': cmds_summary[:1000],
-                'num_items': len(items)
-            }
-
             for item, result in zip(items, results):
                 if item.callback:
                     item.callback()
 
-                final_result = result
-
-                # Retry only failed items individually (do not resend successful ones)
-                if isinstance(result, redis.exceptions.RedisError):
-                    current_log_context = {**log_extra_base, 'failed_cmd': item.cmd}
-                    final_result = execute_single_with_retry(
-                        self.talker.redis,
-                        item.cmd,
-                        item.args,
-                        item.kwargs,
-                        log_context_extra=current_log_context
-                    )
-
                 if item.event:  # non-async
-                    item.results.append(final_result)
+                    item.results.append(result)
                     item.event.set()
         finally:
             self._current_workers.release()
