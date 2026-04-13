@@ -3,9 +3,19 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import partial
 from queue import Queue, Empty
-from threading import RLock, Event, Semaphore
+from threading import RLock, Semaphore
+
+from gevent.monkey import get_original
 
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
+
+# Use the original threading.Event instead of gevent's patched version.
+# gevent.Event only supports signaling between greenlets in the same thread,
+# but TalkerReactor uses ThreadPoolExecutor which runs in real OS threads.
+# When _send_data() calls event.set() from a worker thread, gevent.Event
+# fails to wake up the greenlet waiting on event.wait() in the main thread.
+Event = get_original('threading', 'Event')
+
 from easypy.timing import wait, Timer
 from easypy.units import MINUTE
 
