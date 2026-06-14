@@ -1,5 +1,5 @@
 import json
-
+import socket
 from functools import partial
 
 from redis import StrictRedis
@@ -29,8 +29,10 @@ REDIS_RETRY_CAP_SECONDS = 10
 REDIS_RETRY_MAX_ATTEMPTS = 7  # backoff sleeps total 54s: 2+4+8+10+10+10+10
 MAX_REDIS_CONNECTIONS = 100
 
+
 @locking_cache
-def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_seconds, redis_retry_max_attempts, max_connections, health_check_interval):
+def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_seconds,
+              redis_retry_max_attempts, max_connections, health_check_interval):
     # Keep cumulative backoff sleep under one minute.
     retry_policy = Retry(
         backoff=ExponentialBackoff(base=redis_retry_base_seconds, cap=redis_retry_cap_seconds),
@@ -44,18 +46,29 @@ def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_se
         retry_on_timeout=REDIS_RETRY_ON_TIMEOUT,
         retry_on_error=[redis.exceptions.ConnectionError],
         health_check_interval=health_check_interval,
-        max_connections=max_connections
+        max_connections=max_connections,
+        socket_keepalive=True,
+        socket_keepalive_options={
+            socket.TCP_KEEPIDLE: 60,   # start probing after 60s idle
+            socket.TCP_KEEPINTVL: 30,  # probe every 30s
+            socket.TCP_KEEPCNT: 5,     # 5 misses → declare dead
+        },
     )
 
 
 @locking_cache
-def get_talker(host, password, port, agent_version=None, name=None,  redis_retry_base_seconds=REDIS_RETRY_BASE_SECONDS, redis_retry_cap_seconds=REDIS_RETRY_CAP_SECONDS, redis_retry_max_attempts=REDIS_RETRY_MAX_ATTEMPTS, max_connections=MAX_REDIS_CONNECTIONS, health_check_interval=REDIS_HEALTH_CHECK_INTERVAL):
+def get_talker(host, password, port, agent_version=None, name=None,
+               redis_retry_base_seconds=REDIS_RETRY_BASE_SECONDS,
+               redis_retry_cap_seconds=REDIS_RETRY_CAP_SECONDS,
+               redis_retry_max_attempts=REDIS_RETRY_MAX_ATTEMPTS,
+               max_connections=MAX_REDIS_CONNECTIONS,
+               health_check_interval=REDIS_HEALTH_CHECK_INTERVAL):
     redis_client_params = dict(
         redis_retry_base_seconds=redis_retry_base_seconds,
         redis_retry_cap_seconds=redis_retry_cap_seconds,
-        redis_retry_max_attempts=redis_retry_max_attempts, 
+        redis_retry_max_attempts=redis_retry_max_attempts,
         max_connections=max_connections,
-        health_check_interval=health_check_interval
+        health_check_interval=health_check_interval,
     )
     return Talker(host, password, port, agent_version=agent_version, name=name, redis_client_params=redis_client_params)
 
@@ -81,6 +94,7 @@ class Talker(object):
         self.reactor = TalkerReactor(self)
         _logger.debug("%s: initialized", self)
         self._redis_client_params = redis_client_params or {}
+
     @property
     def redis_params(self):
         """
@@ -393,7 +407,7 @@ class Talker(object):
         with self.redis.pipeline() as p:
             for cmd in cmds:
                 cmd._request_outputs(p)
-            
+
             self._pipeline_flush_log(p)
             pipeline_results_part1 = p.execute()
             p.reset()
@@ -403,12 +417,12 @@ class Talker(object):
                 cmd.on_output(cmd.stdout, stdout_key)
                 cmd.on_output(cmd.stderr, stderr_key)
                 cmd._trim_outputs(stdout_key, stderr_key, pipeline=p)
-                
+
                 stdout_content, stderr_content = stdout_key, stderr_key
                 if decode:
                     (stdout_content, stderr_content) = (cmd._decode_output(out, decode) for out in (stdout_key, stderr_key))
                 ret.append((stdout_content, stderr_content))
-            
+
             if p.command_stack:
                 self._pipeline_flush_log(p)
                 p.execute()
