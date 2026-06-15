@@ -1,5 +1,6 @@
 import json
 import socket
+import sys
 from functools import partial
 
 from redis import StrictRedis
@@ -29,6 +30,18 @@ REDIS_RETRY_CAP_SECONDS = 10
 REDIS_RETRY_MAX_ATTEMPTS = 7  # backoff sleeps total 54s: 2+4+8+10+10+10+10
 MAX_REDIS_CONNECTIONS = 100
 
+# macOS spells TCP_KEEPIDLE as TCP_KEEPALIVE (sockopt 0x10); same semantics.
+# Python <3.10 on macOS doesn't expose socket.TCP_KEEPALIVE, so fall back to the raw int.
+if sys.platform == "darwin":
+    _TCP_KEEPIDLE = getattr(socket, "TCP_KEEPALIVE", 0x10)
+else:
+    _TCP_KEEPIDLE = socket.TCP_KEEPIDLE
+TCP_KEEPALIVE_OPTIONS = {
+    _TCP_KEEPIDLE: 60,         # start probing after 60s idle
+    socket.TCP_KEEPINTVL: 30,  # probe every 30s
+    socket.TCP_KEEPCNT: 5,     # 5 misses → declare dead
+}
+
 
 @locking_cache
 def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_seconds,
@@ -48,11 +61,7 @@ def get_redis(host, password, port, redis_retry_base_seconds, redis_retry_cap_se
         health_check_interval=health_check_interval,
         max_connections=max_connections,
         socket_keepalive=True,
-        socket_keepalive_options={
-            socket.TCP_KEEPIDLE: 60,   # start probing after 60s idle
-            socket.TCP_KEEPINTVL: 30,  # probe every 30s
-            socket.TCP_KEEPCNT: 5,     # 5 misses → declare dead
-        },
+        socket_keepalive_options=TCP_KEEPALIVE_OPTIONS,
     )
 
 
