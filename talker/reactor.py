@@ -9,12 +9,41 @@ from gevent.monkey import get_original
 
 from easypy.concurrency import _check_exiting, concurrent, _run_with_exception_logging, raise_in_main_thread
 
-# Use the original threading.Event instead of gevent's patched version.
-# gevent.Event only supports signaling between greenlets in the same thread,
-# but TalkerReactor uses ThreadPoolExecutor which runs in real OS threads.
-# When _send_data() calls event.set() from a worker thread, gevent.Event
-# fails to wake up the greenlet waiting on event.wait() in the main thread.
-Event = get_original('threading', 'Event')
+# The pipeline results are signaled from a ThreadPoolExecutor thread to whichever native thread sent the
+# command. gevent's Event only signals greenlets of one hub, and under monkey-patching the stdlib Event
+# is no better: its Condition is built from threading.Lock, which is then gevent's lock, so a waiter can
+# park forever inside the Condition's ownership probe while the worker blocks on set(). A real OS lock
+# is the only primitive gevent leaves alone.
+_allocate_os_lock = get_original('threading', 'Lock')
+
+
+class Event:
+    """A one-shot event on a real OS lock, safe between native threads under gevent."""
+
+    def __init__(self):
+        self._lock = _allocate_os_lock()
+        self._lock.acquire()
+        self._flag = False
+
+    def __repr__(self):
+        return "<{} {}>".format(self.__class__.__name__, "set" if self._flag else "unset")
+
+    def is_set(self):
+        return self._flag
+
+    def set(self):
+        if self._flag:
+            return
+        self._flag = True
+        self._lock.release()
+
+    def wait(self, timeout=None):
+        if self._flag:
+            return True
+        if not self._lock.acquire(True, -1 if timeout is None else timeout):
+            return False
+        self._lock.release()  # let later waiters through
+        return True
 
 from easypy.timing import wait, Timer
 from easypy.units import MINUTE

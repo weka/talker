@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+reactor: signal pipeline results through a real OS lock. The stdlib Event's Condition used gevent's lock under monkey-patching, and a waiter could park forever inside its ownership probe while the reactor worker blocked on set(), leaving every later command in the batch with NoResponseForRedisCommand
 
 ## [1.9.14] - 2026-06-15
 fixed socket options for mac
